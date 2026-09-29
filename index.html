@@ -8,9 +8,11 @@
   <style>
     * { box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 500px; margin: 0 auto; padding: 12px; }
-    #reader-wrapper { position: relative; width: 100%; border-radius: 8px; overflow: hidden; margin-bottom: 8px; }
+    .cam-select-box { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .cam-select-box select { flex: 1; padding: 8px 10px; font-size: 14px; border: 1px solid #ccc; border-radius: 6px; background: #fff; }
+    #reader-wrapper { position: relative; width: 100%; border-radius: 8px; overflow: hidden; margin-bottom: 8px; background: #000; min-height: 220px; }
     #reader { width: 100%; }
-    .focus-ring { position: absolute; width: 60px; height: 60px; border: 2px solid #2da44e; border-radius: 8px; pointer-events: none; transform: translate(-50%, -50%) scale(1.4); opacity: 0; transition: transform 0.2s, opacity 0.2s; }
+    .focus-ring { position: absolute; width: 60px; height: 60px; border: 2px solid #2da44e; border-radius: 8px; pointer-events: none; transform: translate(-50%, -50%) scale(1.4); opacity: 0; transition: transform 0.2s, opacity 0.2s; z-index: 10; }
     .focus-ring.active { opacity: 1; transform: translate(-50%, -50%) scale(1); }
     .camera-tools { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 10px; padding: 6px 10px; background: #f6f8fa; border: 1px solid #e1e4e8; border-radius: 6px; }
     .camera-tools span { font-size: 13px; font-weight: 600; color: #333; }
@@ -33,6 +35,13 @@
 <body>
   <h2>Quét Barcode</h2>
 
+  <div class="cam-select-box">
+    <label for="cameraSelect"><b>📷 Camera:</b></label>
+    <select id="cameraSelect" onchange="onCameraChange(this.value)">
+      <option value="">Đang tải danh sách camera...</option>
+    </select>
+  </div>
+
   <div id="reader-wrapper">
     <div id="reader"></div>
     <div id="focusRing" class="focus-ring"></div>
@@ -43,10 +52,10 @@
     <div class="zoom-btns" id="zoomButtons">
       <button type="button" onclick="setZoom(1, this)">1x</button>
       <button type="button" onclick="setZoom(1.5, this)">1.5x</button>
-      <button type="button" class="active" onclick="setZoom(2, this)">2x (Khuyên dùng)</button>
+      <button type="button" class="active" onclick="setZoom(2, this)">2x</button>
       <button type="button" onclick="setZoom(3, this)">3x</button>
     </div>
-    <button type="button" onclick="triggerRefocus()" style="flex:none;padding:4px 8px;font-size:12px;">Chạm lấy nét</button>
+    <button type="button" onclick="triggerRefocus()" style="flex:none;padding:4px 8px;font-size:12px;">Lấy nét lại</button>
   </div>
 
   <div class="room-box">
@@ -55,7 +64,7 @@
   </div>
 
   <p>Tổng: <b id="count">0</b> mã</p>
-  <div class="status" id="statusText">Trạng thái: Đang kết nối kênh...</div>
+  <div class="status" id="statusText">Trạng thái: Đang khởi tạo...</div>
 
   <div class="btn-row">
     <button class="primary" id="btnSend">Gửi sang thiết bị khác</button>
@@ -67,17 +76,20 @@
   <ul id="list"></ul>
 
   <script>
-    // ponytail: hardware zoom & continuous focus via MediaStreamTrack capabilities.
+    // ponytail: Html5Qrcode multi-camera controller with persistent selection.
     let codes = [];
     const listEl = document.getElementById('list');
     const countEl = document.getElementById('count');
     const statusEl = document.getElementById('statusText');
     const roomInput = document.getElementById('roomInput');
+    const cameraSelect = document.getElementById('cameraSelect');
     const focusRing = document.getElementById('focusRing');
     const readerWrapper = document.getElementById('reader-wrapper');
+    let html5QrCode = null;
     let videoTrack = null;
     let eventSource = null;
     let audioCtx = null;
+    let isStarting = false;
 
     function playBeep() {
       try {
@@ -109,7 +121,7 @@
 
     async function triggerRefocus(e) {
       if (!videoTrack) return;
-      if (e) {
+      if (e && e.clientX) {
         const rect = readerWrapper.getBoundingClientRect();
         focusRing.style.left = `${e.clientX - rect.left}px`;
         focusRing.style.top = `${e.clientY - rect.top}px`;
@@ -131,22 +143,133 @@
 
     readerWrapper.addEventListener('click', triggerRefocus);
 
-    // Bắt track camera khi video khởi động
-    const observer = new MutationObserver(() => {
+    function hookVideoTrack() {
       const video = document.querySelector('#reader video');
-      if (video && video.srcObject && !videoTrack) {
+      if (video && video.srcObject) {
         const [track] = video.srcObject.getVideoTracks();
         if (track) {
           videoTrack = track;
-          // Tự động kích hoạt zoom 2x và lấy nét liên tục sau khi camera mở
           setTimeout(() => {
             setZoom(2.0, document.querySelector('.zoom-btns button:nth-child(3)'));
             triggerRefocus();
           }, 600);
         }
       }
-    });
-    observer.observe(document.getElementById('reader'), { childList: true, subtree: true });
+    }
+
+    let lastScanTime = 0;
+    function onScanSuccess(decodedText) {
+      const now = Date.now();
+      if (codes[codes.length - 1] === decodedText && (now - lastScanTime < 2000)) return;
+      lastScanTime = now;
+      codes.push(decodedText);
+      renderList();
+      playBeep();
+      if (navigator.vibrate) navigator.vibrate(80);
+    }
+
+    const formatsToSupport = [
+      Html5QrcodeSupportedFormats.EAN_13,
+      Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.CODE_128,
+      Html5QrcodeSupportedFormats.CODE_39,
+      Html5QrcodeSupportedFormats.UPC_A,
+      Html5QrcodeSupportedFormats.UPC_E,
+      Html5QrcodeSupportedFormats.QR_CODE
+    ];
+
+    async function startScanner(cameraId) {
+      if (isStarting) return;
+      isStarting = true;
+      statusEl.textContent = 'Đang chuyển camera...';
+      try {
+        if (html5QrCode && html5QrCode.isScanning) {
+          await html5QrCode.stop();
+        }
+        if (!html5QrCode) {
+          html5QrCode = new Html5Qrcode("reader", {
+            experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+            formatsToSupport: formatsToSupport
+          });
+        }
+
+        const cameraConfig = cameraId ? { deviceId: { exact: cameraId } } : { facingMode: "environment" };
+
+        await html5QrCode.start(
+          cameraConfig,
+          {
+            fps: 20,
+            qrbox: (w, h) => ({
+              width: Math.floor(Math.min(w * 0.88, 380)),
+              height: Math.floor(Math.min(h * 0.45, 180))
+            }),
+            aspectRatio: 1.777778,
+            videoConstraints: {
+              width: { min: 1280, ideal: 1920 },
+              height: { min: 720, ideal: 1080 }
+            }
+          },
+          onScanSuccess,
+          () => {}
+        );
+
+        statusEl.textContent = 'Camera sẵn sàng.';
+        hookVideoTrack();
+      } catch (err) {
+        statusEl.textContent = 'Lỗi camera: ' + (err.message || err);
+      } finally {
+        isStarting = false;
+      }
+    }
+
+    async function onCameraChange(cameraId) {
+      if (!cameraId) return;
+      localStorage.setItem('preferred_camera_id', cameraId);
+      await startScanner(cameraId);
+    }
+
+    async function initCameraList() {
+      try {
+        // Xin quyền camera trước để lấy tên label chính xác
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        stream.getTracks().forEach(t => t.stop());
+
+        const devices = await Html5Qrcode.getCameras();
+        cameraSelect.innerHTML = '';
+        if (!devices || !devices.length) {
+          cameraSelect.innerHTML = '<option value="">Không tìm thấy camera</option>';
+          await startScanner(null);
+          return;
+        }
+
+        const savedId = localStorage.getItem('preferred_camera_id');
+        let selectedId = devices[0].id;
+
+        devices.forEach((dev, idx) => {
+          const opt = document.createElement('option');
+          opt.value = dev.id;
+          opt.textContent = dev.label || `Camera ${idx + 1}`;
+          cameraSelect.appendChild(opt);
+
+          const lbl = (dev.label || '').toLowerCase();
+          // Ưu tiên camera sau (back/rear/environment)
+          if (lbl.includes('back') || lbl.includes('sau') || lbl.includes('0') || lbl.includes('environment')) {
+            selectedId = dev.id;
+          }
+        });
+
+        if (savedId && devices.some(d => d.id === savedId)) {
+          selectedId = savedId;
+        }
+
+        cameraSelect.value = selectedId;
+        await startScanner(selectedId);
+      } catch (err) {
+        // Nếu không liệt kê được camera, fallback chạy tự động camera sau
+        cameraSelect.innerHTML = '<option value="">Camera mặc định</option>';
+        await startScanner(null);
+      }
+    }
 
     function getTopic() {
       return (roomInput.value.trim() || 'enscen-barcode').replace(/[^a-zA-Z0-9_-]/g, '');
@@ -171,47 +294,6 @@
       codes.splice(index, 1);
       renderList();
     }
-
-    let lastScanTime = 0;
-    function onScanSuccess(decodedText) {
-      const now = Date.now();
-      if (codes[codes.length - 1] === decodedText && (now - lastScanTime < 2000)) return;
-      lastScanTime = now;
-      codes.push(decodedText);
-      renderList();
-      playBeep();
-      if (navigator.vibrate) navigator.vibrate(80);
-    }
-
-    const formatsToSupport = [
-      Html5QrcodeSupportedFormats.EAN_13,
-      Html5QrcodeSupportedFormats.EAN_8,
-      Html5QrcodeSupportedFormats.CODE_128,
-      Html5QrcodeSupportedFormats.CODE_39,
-      Html5QrcodeSupportedFormats.UPC_A,
-      Html5QrcodeSupportedFormats.UPC_E,
-      Html5QrcodeSupportedFormats.QR_CODE
-    ];
-
-    const scanner = new Html5QrcodeScanner('reader', {
-      fps: 20,
-      qrbox: (w, h) => ({
-        width: Math.floor(Math.min(w * 0.88, 380)),
-        height: Math.floor(Math.min(h * 0.45, 180))
-      }),
-      aspectRatio: 1.777778,
-      showTorchButtonIfSupported: true,
-      videoConstraints: {
-        facingMode: { ideal: "environment" },
-        width: { min: 1280, ideal: 1920 },
-        height: { min: 720, ideal: 1080 }
-      },
-      experimentalFeatures: {
-        useBarCodeDetectorIfSupported: true
-      },
-      formatsToSupport: formatsToSupport
-    });
-    scanner.render(onScanSuccess);
 
     document.getElementById('btnSend').onclick = async () => {
       if (!codes.length) return alert('Chưa có mã nào để gửi.');
@@ -297,6 +379,7 @@
       renderList();
     };
 
+    initCameraList();
     fetchFromChannel();
     connectSSE();
   </script>
