@@ -5,86 +5,143 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Barcode Scanner</title>
   <script src="https://unpkg.com/html5-qrcode"></script>
   <style>
-    * { box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 500px; margin: 0 auto; padding: 12px; }
-    .header-row { display: flex; justify-content: space-between; align-items: baseline; }
-    .cam-select-box { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
-    .cam-select-box select { flex: 1; padding: 9px 10px; font-size: 14px; border: 2px solid #0969da; border-radius: 6px; background: #fff; font-weight: 500; }
-    #reader-wrapper { position: relative; width: 100%; border-radius: 8px; overflow: hidden; margin-bottom: 8px; background: #000; min-height: 200px; }
-    #reader { width: 100%; overflow: hidden; }
-    #reader video { width: 100% !important; transition: transform 0.25s ease-out; transform-origin: center center; }
-    .focus-ring { position: absolute; width: 60px; height: 60px; border: 2px solid #2da44e; border-radius: 8px; pointer-events: none; transform: translate(-50%, -50%) scale(1.4); opacity: 0; transition: transform 0.2s, opacity 0.2s; z-index: 10; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      max-width: 540px;
+      margin: 0 auto;
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+      background: #f8f9fa;
+    }
+    .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .header-row h2 { font-size: 18px; color: #111; }
+    .cam-select-box { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+    .cam-select-box select { flex: 1; padding: 6px 8px; font-size: 13px; border: 1.5px solid #0969da; border-radius: 6px; background: #fff; }
+
+    /* Chiều cao khung camera khóa ở 30% màn hình */
+    #reader-wrapper {
+      position: relative;
+      width: 100%;
+      height: 30vh;
+      min-height: 150px;
+      max-height: 32vh;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #000;
+      flex-shrink: 0;
+    }
+    #reader {
+      width: 100% !important;
+      height: 100% !important;
+      border: none !important;
+    }
+    #reader video {
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover !important;
+      transition: transform 0.25s ease-out;
+      transform-origin: center center;
+    }
+    .focus-ring { position: absolute; width: 50px; height: 50px; border: 2px solid #2da44e; border-radius: 6px; pointer-events: none; transform: translate(-50%, -50%) scale(1.4); opacity: 0; transition: transform 0.2s, opacity 0.2s; z-index: 10; }
     .focus-ring.active { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-    .camera-tools { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 10px; padding: 6px 10px; background: #f6f8fa; border: 1px solid #e1e4e8; border-radius: 6px; }
-    .camera-tools span { font-size: 13px; font-weight: 600; color: #333; }
+
+    .camera-tools { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-top: 6px; margin-bottom: 6px; padding: 4px 8px; background: #fff; border: 1px solid #e1e4e8; border-radius: 6px; flex-shrink: 0; }
+    .camera-tools span { font-size: 12px; font-weight: 600; color: #444; }
     .zoom-btns { display: flex; gap: 4px; }
-    .zoom-btns button { padding: 5px 10px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; }
+    .zoom-btns button { padding: 4px 8px; font-size: 11px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; }
     .zoom-btns button.active { background: #0969da; color: #fff; border-color: #0969da; font-weight: bold; }
-    .btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
-    button { flex: 1 1 calc(50% - 8px); padding: 11px; font-size: 14px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; font-weight: 500; }
+
+    .room-box { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; padding: 4px 8px; background: #fff; border: 1px solid #e1e4e8; border-radius: 6px; font-size: 12px; flex-shrink: 0; }
+    .room-box input { flex: 1; padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; font-weight: bold; }
+
+    .btn-row { display: flex; gap: 6px; margin-bottom: 6px; flex-shrink: 0; }
+    button.action-btn { flex: 1; padding: 8px 4px; font-size: 12px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; font-weight: 500; }
     button.primary { background: #0969da; color: #fff; border-color: #0969da; font-weight: bold; }
     button.success { background: #2da44e; color: #fff; border-color: #2c974b; font-weight: bold; }
     button.danger { background: #cf222e; color: #fff; border-color: #a40e26; }
-    button.del-btn { flex: none; padding: 4px 8px; font-size: 12px; color: #cf222e; border: 1px solid #cf222e; border-radius: 4px; background: transparent; }
-    .room-box { display: flex; align-items: center; gap: 8px; margin: 10px 0; padding: 8px 12px; background: #f6f8fa; border: 1px solid #e1e4e8; border-radius: 6px; }
-    .room-box input { flex: 1; padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; }
-    .status { font-size: 13px; color: #555; padding: 4px 0; min-height: 24px; }
+    button.del-btn { flex: none; padding: 3px 8px; font-size: 11px; color: #cf222e; border: 1px solid #cf222e; border-radius: 4px; background: #fff; }
+
+    .list-header { display: flex; justify-content: space-between; align-items: center; padding: 4px 2px; font-size: 13px; font-weight: 600; color: #333; flex-shrink: 0; }
+    .status { font-size: 11px; color: #666; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; margin-bottom: 4px; }
+
+    /* Khu vực danh sách chiếm toàn bộ chiều cao còn lại và cuộn mượt */
+    #list-container {
+      flex: 1;
+      overflow-y: auto;
+      background: #fff;
+      border: 1px solid #e1e4e8;
+      border-radius: 6px;
+      padding: 0 8px;
+      margin-bottom: 6px;
+      -webkit-overflow-scrolling: touch;
+    }
     ul { list-style: none; padding: 0; margin: 0; }
-    li { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee; font-family: monospace; font-size: 14px; }
+    li { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee; font-family: monospace; font-size: 13px; }
   </style>
 </head>
 <body>
   <div class="header-row">
-    <h2 style="margin:8px 0;">Quét Barcode</h2>
-    <small style="color:#888;">v1.4</small>
+    <h2>Quét Barcode</h2>
+    <small style="color:#888;">v1.5</small>
   </div>
 
   <div class="cam-select-box">
-    <label for="cameraSelect"><b>📷 Đổi Cam:</b></label>
+    <label for="cameraSelect" style="font-size:12px;font-weight:600;">📷 Cam:</label>
     <select id="cameraSelect" onchange="onCameraChange(this.value)">
-      <option value="">Đang tải danh sách camera...</option>
+      <option value="">Đang tải danh sách...</option>
     </select>
   </div>
 
+  <!-- Khung camera 30vh -->
   <div id="reader-wrapper">
     <div id="reader"></div>
     <div id="focusRing" class="focus-ring"></div>
   </div>
 
   <div class="camera-tools">
-    <span>Thu phóng:</span>
+    <span>Zoom:</span>
     <div class="zoom-btns" id="zoomButtons">
       <button type="button" onclick="setZoom(1, this)">1x</button>
       <button type="button" onclick="setZoom(1.5, this)">1.5x</button>
       <button type="button" class="active" onclick="setZoom(2, this)">2x</button>
       <button type="button" onclick="setZoom(3, this)">3x</button>
     </div>
-    <button type="button" onclick="triggerRefocus()" style="flex:none;padding:5px 8px;font-size:12px;">Lấy nét</button>
+    <button type="button" onclick="triggerRefocus()" style="flex:none;padding:4px 8px;font-size:11px;border-radius:4px;border:1px solid #ccc;background:#fff;">Lấy nét</button>
   </div>
 
   <div class="room-box">
-    <label for="roomInput"><b>Mã kênh:</b></label>
+    <label for="roomInput"><b>Kênh:</b></label>
     <input type="text" id="roomInput" value="enscen-barcode">
   </div>
 
-  <p>Tổng: <b id="count">0</b> mã</p>
-  <div class="status" id="statusText">Trạng thái: Đang kết nối...</div>
-
   <div class="btn-row">
-    <button class="primary" id="btnSend">Gửi sang thiết bị khác</button>
-    <button id="btnFetch">Nhận mã mới nhất</button>
-    <button class="success" id="btnExport">Tải file TXT</button>
-    <button class="danger" id="btnClear">Xóa tất cả</button>
+    <button class="action-btn primary" id="btnSend">Gửi lên Cloud</button>
+    <button class="action-btn" id="btnFetch">Lấy mã mới</button>
+    <button class="action-btn success" id="btnExport">Tải TXT</button>
+    <button class="action-btn danger" id="btnClear">Xóa hết</button>
   </div>
 
-  <ul id="list"></ul>
+  <div class="list-header">
+    <span>Danh sách đã quét</span>
+    <span>Tổng: <b id="count">0</b> mã</span>
+  </div>
+  <div class="status" id="statusText">Trạng thái: Đang kết nối...</div>
+
+  <!-- Danh sách barcode chiếm phần lớn màn hình còn lại -->
+  <div id="list-container">
+    <ul id="list"></ul>
+  </div>
 
   <script>
-    // ponytail: hybrid zoom (hardware camera zoom if supported, CSS digital crop zoom fallback).
+    // ponytail: 30vh viewport layout with flex list container.
     let codes = [];
     const listEl = document.getElementById('list');
     const countEl = document.getElementById('count');
@@ -123,23 +180,19 @@
       const video = document.querySelector('#reader video');
       const caps = (videoTrack && videoTrack.getCapabilities) ? videoTrack.getCapabilities() : {};
 
-      // 1. Nếu thiết bị hỗ trợ zoom phần cứng (Android / Camera cao cấp)
       if (caps.zoom) {
         try {
           const target = Math.min(Math.max(val, caps.zoom.min), caps.zoom.max);
           await videoTrack.applyConstraints({ advanced: [{ zoom: target }] });
           if (video) video.style.transform = 'none';
-          statusEl.textContent = `Thu phóng phần cứng: ${target}x`;
+          statusEl.textContent = `Zoom phần cứng: ${target}x`;
           return;
         } catch (_) {}
       }
 
-      // 2. Fallback: Thu phóng kỹ thuật số (Webcam PC, Laptop, iPhone...)
       if (video) {
         video.style.transform = val > 1 ? `scale(${val})` : 'none';
-        statusEl.textContent = `Thu phóng kỹ thuật số: ${val}x`;
-      } else {
-        statusEl.textContent = `Đã chọn thu phóng: ${val}x`;
+        statusEl.textContent = `Zoom kỹ thuật số: ${val}x`;
       }
     }
 
@@ -162,10 +215,8 @@
           if (caps.focusMode.includes('continuous')) {
             await videoTrack.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
           }
-          statusEl.textContent = 'Đã kích hoạt lấy nét.';
+          statusEl.textContent = 'Đã lấy nét lại.';
         } catch (_) {}
-      } else {
-        statusEl.textContent = 'Camera tiêu cự cố định (giữ sản phẩm cách cam 15-25cm).';
       }
     }
 
@@ -252,8 +303,8 @@
           {
             fps: 20,
             qrbox: (w, h) => ({
-              width: Math.floor(Math.min(w * 0.88, 380)),
-              height: Math.floor(Math.min(h * 0.45, 180))
+              width: Math.floor(Math.min(w * 0.88, 360)),
+              height: Math.floor(Math.min(h * 0.6, 140))
             }),
             aspectRatio: 1.777778
           },
@@ -261,7 +312,7 @@
           () => {}
         );
 
-        statusEl.textContent = 'Camera đang hoạt động.';
+        statusEl.textContent = 'Camera sẵn sàng.';
         hookVideoTrack();
       } catch (err) {
         statusEl.textContent = 'Lỗi camera: ' + (err.message || err);
@@ -323,13 +374,14 @@
     function renderList() {
       countEl.textContent = codes.length;
       listEl.innerHTML = '';
-      codes.forEach((code, idx) => {
+      codes.slice().reverse().forEach((code, reversedIdx) => {
+        const originalIdx = codes.length - 1 - reversedIdx;
         const li = document.createElement('li');
-        li.innerHTML = `<span>${idx + 1}. ${code}</span>`;
+        li.innerHTML = `<span><b>#${originalIdx + 1}</b> &nbsp; ${code}</span>`;
         const delBtn = document.createElement('button');
         delBtn.className = 'del-btn';
         delBtn.textContent = 'Xóa';
-        delBtn.onclick = () => removeCode(idx);
+        delBtn.onclick = () => removeCode(originalIdx);
         li.appendChild(delBtn);
         listEl.appendChild(li);
       });
@@ -384,7 +436,7 @@
       const topic = getTopic();
       eventSource = new EventSource(`https://ntfy.sh/${topic}/sse`);
       eventSource.onopen = () => {
-        statusEl.textContent = `Đã kết nối kênh [${topic}]. Sẵn sàng đồng bộ.`;
+        statusEl.textContent = `Đã kết nối [${topic}]. Sẵn sàng đồng bộ.`;
       };
       eventSource.onmessage = (e) => {
         try {
@@ -397,7 +449,7 @@
         } catch (_) {}
       };
       eventSource.onerror = () => {
-        statusEl.textContent = 'Mất kết nối kênh thời gian thực, bấm "Nhận mã" để tải lại.';
+        statusEl.textContent = 'Mất kết nối realtime, bấm "Lấy mã mới" để tải lại.';
       };
     }
 
