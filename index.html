@@ -15,13 +15,14 @@
     .cam-select-box { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
     .cam-select-box select { flex: 1; padding: 9px 10px; font-size: 14px; border: 2px solid #0969da; border-radius: 6px; background: #fff; font-weight: 500; }
     #reader-wrapper { position: relative; width: 100%; border-radius: 8px; overflow: hidden; margin-bottom: 8px; background: #000; min-height: 200px; }
-    #reader { width: 100%; }
+    #reader { width: 100%; overflow: hidden; }
+    #reader video { width: 100% !important; transition: transform 0.25s ease-out; transform-origin: center center; }
     .focus-ring { position: absolute; width: 60px; height: 60px; border: 2px solid #2da44e; border-radius: 8px; pointer-events: none; transform: translate(-50%, -50%) scale(1.4); opacity: 0; transition: transform 0.2s, opacity 0.2s; z-index: 10; }
     .focus-ring.active { opacity: 1; transform: translate(-50%, -50%) scale(1); }
     .camera-tools { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 10px; padding: 6px 10px; background: #f6f8fa; border: 1px solid #e1e4e8; border-radius: 6px; }
     .camera-tools span { font-size: 13px; font-weight: 600; color: #333; }
     .zoom-btns { display: flex; gap: 4px; }
-    .zoom-btns button { padding: 4px 10px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; }
+    .zoom-btns button { padding: 5px 10px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; }
     .zoom-btns button.active { background: #0969da; color: #fff; border-color: #0969da; font-weight: bold; }
     .btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
     button { flex: 1 1 calc(50% - 8px); padding: 11px; font-size: 14px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; font-weight: 500; }
@@ -39,7 +40,7 @@
 <body>
   <div class="header-row">
     <h2 style="margin:8px 0;">Quét Barcode</h2>
-    <small style="color:#888;">v1.3-switch</small>
+    <small style="color:#888;">v1.4</small>
   </div>
 
   <div class="cam-select-box">
@@ -62,7 +63,7 @@
       <button type="button" class="active" onclick="setZoom(2, this)">2x</button>
       <button type="button" onclick="setZoom(3, this)">3x</button>
     </div>
-    <button type="button" onclick="triggerRefocus()" style="flex:none;padding:4px 8px;font-size:12px;">Lấy nét lại</button>
+    <button type="button" onclick="triggerRefocus()" style="flex:none;padding:5px 8px;font-size:12px;">Lấy nét</button>
   </div>
 
   <div class="room-box">
@@ -83,7 +84,7 @@
   <ul id="list"></ul>
 
   <script>
-    // ponytail: Html5Qrcode with explicit hardware track release on switch.
+    // ponytail: hybrid zoom (hardware camera zoom if supported, CSS digital crop zoom fallback).
     let codes = [];
     const listEl = document.getElementById('list');
     const countEl = document.getElementById('count');
@@ -97,6 +98,7 @@
     let eventSource = null;
     let audioCtx = null;
     let isStarting = false;
+    let currentZoom = 2;
 
     function playBeep() {
       try {
@@ -114,20 +116,34 @@
     }
 
     async function setZoom(val, btnEl) {
-      if (!videoTrack) return;
-      try {
-        const caps = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
-        if (caps.zoom) {
+      currentZoom = val;
+      document.querySelectorAll('.zoom-btns button').forEach(b => b.classList.remove('active'));
+      if (btnEl) btnEl.classList.add('active');
+
+      const video = document.querySelector('#reader video');
+      const caps = (videoTrack && videoTrack.getCapabilities) ? videoTrack.getCapabilities() : {};
+
+      // 1. Nếu thiết bị hỗ trợ zoom phần cứng (Android / Camera cao cấp)
+      if (caps.zoom) {
+        try {
           const target = Math.min(Math.max(val, caps.zoom.min), caps.zoom.max);
           await videoTrack.applyConstraints({ advanced: [{ zoom: target }] });
-          document.querySelectorAll('.zoom-btns button').forEach(b => b.classList.remove('active'));
-          if (btnEl) btnEl.classList.add('active');
-        }
-      } catch (_) {}
+          if (video) video.style.transform = 'none';
+          statusEl.textContent = `Thu phóng phần cứng: ${target}x`;
+          return;
+        } catch (_) {}
+      }
+
+      // 2. Fallback: Thu phóng kỹ thuật số (Webcam PC, Laptop, iPhone...)
+      if (video) {
+        video.style.transform = val > 1 ? `scale(${val})` : 'none';
+        statusEl.textContent = `Thu phóng kỹ thuật số: ${val}x`;
+      } else {
+        statusEl.textContent = `Đã chọn thu phóng: ${val}x`;
+      }
     }
 
     async function triggerRefocus(e) {
-      if (!videoTrack) return;
       if (e && e.clientX) {
         const rect = readerWrapper.getBoundingClientRect();
         focusRing.style.left = `${e.clientX - rect.left}px`;
@@ -135,17 +151,22 @@
         focusRing.classList.add('active');
         setTimeout(() => focusRing.classList.remove('active'), 500);
       }
-      try {
-        const caps = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
-        if (caps.focusMode) {
+
+      if (!videoTrack) return;
+      const caps = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
+      if (caps.focusMode) {
+        try {
           if (caps.focusMode.includes('single-shot')) {
             await videoTrack.applyConstraints({ advanced: [{ focusMode: 'single-shot' }] });
           }
           if (caps.focusMode.includes('continuous')) {
             await videoTrack.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
           }
-        }
-      } catch (_) {}
+          statusEl.textContent = 'Đã kích hoạt lấy nét.';
+        } catch (_) {}
+      } else {
+        statusEl.textContent = 'Camera tiêu cự cố định (giữ sản phẩm cách cam 15-25cm).';
+      }
     }
 
     readerWrapper.addEventListener('click', triggerRefocus);
@@ -157,9 +178,9 @@
         if (track) {
           videoTrack = track;
           setTimeout(() => {
-            setZoom(2.0, document.querySelector('.zoom-btns button:nth-child(3)'));
-            triggerRefocus();
-          }, 500);
+            const btn2x = document.querySelector('.zoom-btns button:nth-child(3)');
+            setZoom(2.0, btn2x);
+          }, 400);
         }
       }
     }
@@ -197,7 +218,6 @@
           }
         } catch (_) {}
       }
-      // Dừng triệt để tất cả MediaStreamTrack của camera trước đó để Windows/Android nhả camera
       document.querySelectorAll('#reader video').forEach(v => {
         if (v.srcObject) {
           try {
