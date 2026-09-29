@@ -9,6 +9,43 @@
   <title>Barcode Scanner</title>
   <script src="https://unpkg.com/html5-qrcode"></script>
   <style>
+    :root {
+      --bg-body: #f8f9fa;
+      --bg-card: #ffffff;
+      --bg-card-sub: #f6f8fa;
+      --text-main: #111111;
+      --text-muted: #666666;
+      --border-color: #e1e4e8;
+      --item-border: #eeeeee;
+      --input-bg: #ffffff;
+      --input-border: #cccccc;
+      --btn-bg: #ffffff;
+      --btn-text: #24292f;
+      --dup-bg: #fff8e5;
+      --dup-border: #f0883e;
+      --badge-dup-bg: #ffebe9;
+      --badge-dup-text: #cf222e;
+      --badge-dup-border: #ff8182;
+    }
+    body.dark-theme {
+      --bg-body: #0d1117;
+      --bg-card: #161b22;
+      --bg-card-sub: #21262d;
+      --text-main: #f0f6fc;
+      --text-muted: #8b949e;
+      --border-color: #30363d;
+      --item-border: #21262d;
+      --input-bg: #0d1117;
+      --input-border: #30363d;
+      --btn-bg: #21262d;
+      --btn-text: #c9d1d9;
+      --dup-bg: #2b2210;
+      --dup-border: #d29922;
+      --badge-dup-bg: #3d1b1f;
+      --badge-dup-text: #ff7b72;
+      --badge-dup-border: #f85149;
+    }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -19,12 +56,26 @@
       flex-direction: column;
       height: 100vh;
       overflow: hidden;
-      background: #f8f9fa;
+      background: var(--bg-body);
+      color: var(--text-main);
+      transition: background-color 0.2s, color 0.2s;
     }
     .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-    .header-row h2 { font-size: 18px; color: #111; }
+    .header-row h2 { font-size: 18px; color: var(--text-main); }
+    .header-actions { display: flex; align-items: center; gap: 6px; }
+    .hdr-btn {
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      background: var(--bg-card);
+      color: var(--text-main);
+      cursor: pointer;
+    }
+
     .cam-select-box { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
-    .cam-select-box select { flex: 1; padding: 6px 8px; font-size: 13px; border: 1.5px solid #0969da; border-radius: 6px; background: #fff; }
+    .cam-select-box select { flex: 1; padding: 6px 8px; font-size: 13px; border: 1.5px solid #0969da; border-radius: 6px; background: var(--input-bg); color: var(--text-main); }
 
     #reader-wrapper {
       position: relative;
@@ -48,32 +99,32 @@
     .focus-ring { position: absolute; width: 50px; height: 50px; border: 2px solid #2da44e; border-radius: 6px; pointer-events: none; transform: translate(-50%, -50%) scale(1.4); opacity: 0; transition: transform 0.2s, opacity 0.2s; z-index: 10; }
     .focus-ring.active { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 
-    .camera-tools { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin: 6px 0; padding: 4px 8px; background: #fff; border: 1px solid #e1e4e8; border-radius: 6px; flex-shrink: 0; }
-    .camera-tools span { font-size: 12px; font-weight: 600; color: #444; }
+    .camera-tools { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin: 6px 0; padding: 4px 8px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; flex-shrink: 0; }
+    .camera-tools span { font-size: 12px; font-weight: 600; color: var(--text-muted); }
     .zoom-btns { display: flex; gap: 4px; }
-    .zoom-btns button { padding: 4px 8px; font-size: 11px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; }
+    .zoom-btns button { padding: 4px 8px; font-size: 11px; border: 1px solid var(--input-border); border-radius: 4px; background: var(--btn-bg); color: var(--text-main); cursor: pointer; }
     .zoom-btns button.active { background: #0969da; color: #fff; border-color: #0969da; font-weight: bold; }
 
-    .room-box { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; padding: 4px 8px; background: #fff; border: 1px solid #e1e4e8; border-radius: 6px; font-size: 12px; flex-shrink: 0; }
-    .room-box input { flex: 1; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 11px; font-family: monospace; font-weight: bold; }
-    .room-btn { padding: 4px 6px; font-size: 11px; border: 1px solid #ccc; border-radius: 4px; background: #f6f8fa; cursor: pointer; }
+    .room-box { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; padding: 4px 8px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; font-size: 12px; flex-shrink: 0; }
+    .room-box input { flex: 1; padding: 4px 6px; border: 1px solid var(--input-border); border-radius: 4px; font-size: 11px; font-family: monospace; font-weight: bold; background: var(--input-bg); color: var(--text-main); }
+    .room-btn { padding: 4px 6px; font-size: 11px; border: 1px solid var(--input-border); border-radius: 4px; background: var(--bg-card-sub); color: var(--text-main); cursor: pointer; }
 
     .btn-row { display: flex; gap: 6px; margin-bottom: 5px; flex-shrink: 0; }
-    button.action-btn { flex: 1; padding: 7px 4px; font-size: 12px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; font-weight: 500; }
+    button.action-btn { flex: 1; padding: 7px 4px; font-size: 12px; border: 1px solid var(--input-border); border-radius: 6px; background: var(--btn-bg); color: var(--btn-text); cursor: pointer; font-weight: 500; }
     button.primary { background: #0969da; color: #fff; border-color: #0969da; font-weight: bold; }
     button.success { background: #2da44e; color: #fff; border-color: #2c974b; font-weight: bold; }
     button.danger-outline { color: #cf222e; border-color: #cf222e; }
     button.danger { background: #cf222e; color: #fff; border-color: #a40e26; font-weight: bold; }
-    button.del-btn { flex: none; padding: 3px 8px; font-size: 11px; color: #cf222e; border: 1px solid #cf222e; border-radius: 4px; background: #fff; }
+    button.del-btn { flex: none; padding: 3px 8px; font-size: 11px; color: #cf222e; border: 1px solid #cf222e; border-radius: 4px; background: var(--bg-card); cursor: pointer; }
 
-    .list-header { display: flex; justify-content: space-between; align-items: center; padding: 4px 2px; font-size: 13px; font-weight: 600; color: #333; flex-shrink: 0; }
-    .status { font-size: 12px; min-height: 18px; color: #444; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; margin-bottom: 4px; }
+    .list-header { display: flex; justify-content: space-between; align-items: center; padding: 4px 2px; font-size: 13px; font-weight: 600; color: var(--text-main); flex-shrink: 0; }
+    .status { font-size: 12px; min-height: 18px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; margin-bottom: 4px; }
 
     #list-container {
       flex: 1;
       overflow-y: auto;
-      background: #fff;
-      border: 1px solid #e1e4e8;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
       border-radius: 6px;
       padding: 0 8px;
       margin-bottom: 6px;
@@ -85,22 +136,23 @@
       justify-content: space-between;
       align-items: center;
       padding: 8px 6px;
-      border-bottom: 1px solid #eee;
+      border-bottom: 1px solid var(--item-border);
       font-family: monospace;
       font-size: 13px;
+      color: var(--text-main);
       transition: background-color 0.3s;
     }
     li.duplicate-item {
-      background-color: #fff8e5;
-      border-left: 4px solid #f0883e;
+      background-color: var(--dup-bg);
+      border-left: 4px solid var(--dup-border);
       border-radius: 4px;
       margin: 2px 0;
     }
     .code-info { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; word-break: break-all; }
     .badge-dup {
-      background: #ffebe9;
-      color: #cf222e;
-      border: 1px solid #ff8182;
+      background: var(--badge-dup-bg);
+      color: var(--badge-dup-text);
+      border: 1px solid var(--badge-dup-border);
       border-radius: 4px;
       font-size: 10px;
       padding: 2px 6px;
@@ -119,14 +171,18 @@
 </head>
 <body>
   <div class="header-row">
-    <h2>Quét Barcode</h2>
-    <small style="color:#888;">v1.8-secure</small>
+    <h2 id="titleText">Quét Barcode</h2>
+    <div class="header-actions">
+      <button type="button" id="themeToggleBtn" class="hdr-btn" onclick="toggleTheme()" title="Đổi giao diện Sáng / Tối">🌙</button>
+      <button type="button" id="langToggleBtn" class="hdr-btn" onclick="toggleLang()" title="Chuyển đổi Ngôn ngữ">EN</button>
+      <small style="color:var(--text-muted);font-size:11px;">v1.9-secure</small>
+    </div>
   </div>
 
   <div class="cam-select-box">
-    <label for="cameraSelect" style="font-size:12px;font-weight:600;">📷 Cam:</label>
+    <label for="cameraSelect" id="camLabel" style="font-size:12px;font-weight:600;">📷 Cam:</label>
     <select id="cameraSelect" onchange="onCameraChange(this.value)">
-      <option value="">Đang tải danh sách...</option>
+      <option value="">...</option>
     </select>
   </div>
 
@@ -136,21 +192,21 @@
   </div>
 
   <div class="camera-tools">
-    <span>Zoom:</span>
+    <span id="zoomLabel">Zoom:</span>
     <div class="zoom-btns" id="zoomButtons">
       <button type="button" onclick="setZoom(1, this)">1x</button>
       <button type="button" onclick="setZoom(1.5, this)">1.5x</button>
       <button type="button" class="active" onclick="setZoom(2, this)">2x</button>
       <button type="button" onclick="setZoom(3, this)">3x</button>
     </div>
-    <button type="button" onclick="triggerRefocus()" style="flex:none;padding:4px 8px;font-size:11px;border-radius:4px;border:1px solid #ccc;background:#fff;">Lấy nét</button>
+    <button type="button" id="focusBtn" onclick="triggerRefocus()" style="flex:none;padding:4px 8px;font-size:11px;border-radius:4px;border:1px solid var(--input-border);background:var(--btn-bg);color:var(--text-main);">Lấy nét</button>
   </div>
 
   <div class="room-box">
-    <label for="roomInput"><b>Kênh:</b></label>
-    <input type="text" id="roomInput" placeholder="Mã kênh bảo mật...">
-    <button type="button" class="room-btn" onclick="copyChannel()" title="Sao chép tên kênh">Copy</button>
-    <button type="button" class="room-btn" onclick="generateNewChannel()" title="Tạo mã kênh ngẫu nhiên mới">Mới</button>
+    <label for="roomInput"><b id="chanLabel">Kênh:</b></label>
+    <input type="text" id="roomInput" placeholder="...">
+    <button type="button" class="room-btn" id="copyBtn" onclick="copyChannel()">Copy</button>
+    <button type="button" class="room-btn" id="newChanBtn" onclick="generateNewChannel()">Mới</button>
   </div>
 
   <div class="btn-row">
@@ -177,7 +233,153 @@
   </div>
 
   <script>
-    // ponytail: Zero innerHTML interpolation on untrusted code input + cryptographically secure room token generation.
+    // ponytail: I18N dictionary + CSS variable theme switching.
+    const I18N = {
+      vi: {
+        title: "Quét Barcode",
+        camLabel: "📷 Cam:",
+        zoomLabel: "Zoom:",
+        focusBtn: "Lấy nét",
+        chanLabel: "Kênh:",
+        copyBtn: "Copy",
+        newChanBtn: "Mới",
+        btnSend: "Gửi Cloud",
+        btnFetch: "Lấy mã",
+        btnExport: "Tải TXT",
+        btnClearLocal: "Xóa máy này",
+        btnClearCloud: "Xóa trên Cloud",
+        summaryText: "Danh sách mã",
+        totalPrefix: "Tổng:",
+        dupSuffix: "trùng",
+        dupBadge: "Trùng",
+        btnDedup: "Lọc trùng",
+        delBtn: "Xóa",
+        camReady: "Camera sẵn sàng.",
+        camSwitching: "Đang chuyển đổi camera...",
+        camError: "Lỗi camera: ",
+        connecting: "Đang kết nối...",
+        connectedSec: "Đã kết nối kênh bảo mật.",
+        copyDone: "Đã sao chép mã kênh!",
+        newChanPrompt: "Tạo mã kênh bảo mật mới? Bạn cần nhập mã này sang thiết bị còn lại.",
+        newChanDone: "Đã đổi sang kênh bảo mật mới.",
+        clearCloudPrompt: (t) => `Xóa dữ liệu trên Cloud cho kênh [${t}]?\n(Các thiết bị khác cũng sẽ bị xóa)`,
+        clearLocalPrompt: "Xóa danh sách trên máy này? (Không ảnh hưởng đến Cloud)",
+        dedupPrompt: "Lọc trùng: Chỉ giữ 1 bản sao duy nhất cho mỗi mã?",
+        dedupDone: "Đã lọc sạch các mã trùng lặp!",
+        noCodes: "Chưa có mã nào",
+        noCodesSend: "Chưa có mã nào để gửi.",
+        sending: "Đang gửi lên Cloud...",
+        sendSuccess: (n, t) => `Đã gửi ${n} mã lên kênh an toàn.`,
+        sendFail: "Gửi thất bại, thử lại sau.",
+        fetching: "Đang lấy dữ liệu từ kênh...",
+        chanEmpty: "Kênh Cloud hiện đang trống.",
+        receivedCodes: (n) => `Đã nhận ${n} mã từ kênh.`,
+        wipedRemote: "Kênh đã được xóa bởi thiết bị khác.",
+        clearedCloud: "Đã xóa sạch dữ liệu trên kênh Cloud.",
+        clearedLocal: "Đã xóa danh sách trên máy này.",
+        maxLimit: "Đã đạt giới hạn tối đa 5000 mã.",
+        dupFound: (c) => `⚠️ ĐÃ CÓ: [${c}] (Không thêm lại)`,
+        addedCode: (c) => `✅ Đã thêm: ${c}`,
+        refocused: "Đã lấy nét lại.",
+        lostNet: "Mất kết nối realtime, bấm 'Lấy mã' để tải lại."
+      },
+      en: {
+        title: "Barcode Scanner",
+        camLabel: "📷 Cam:",
+        zoomLabel: "Zoom:",
+        focusBtn: "Refocus",
+        chanLabel: "Channel:",
+        copyBtn: "Copy",
+        newChanBtn: "New",
+        btnSend: "Send Cloud",
+        btnFetch: "Get Codes",
+        btnExport: "Export TXT",
+        btnClearLocal: "Clear Local",
+        btnClearCloud: "Clear Cloud",
+        summaryText: "Scanned List",
+        totalPrefix: "Total:",
+        dupSuffix: "dups",
+        dupBadge: "Dup",
+        btnDedup: "Deduplicate",
+        delBtn: "Delete",
+        camReady: "Camera ready.",
+        camSwitching: "Switching camera...",
+        camError: "Camera error: ",
+        connecting: "Connecting...",
+        connectedSec: "Connected to secure channel.",
+        copyDone: "Channel ID copied to clipboard!",
+        newChanPrompt: "Create new secure channel ID? You will need to enter this on other devices.",
+        newChanDone: "Switched to new secure channel.",
+        clearCloudPrompt: (t) => `Clear Cloud data for channel [${t}]?\n(Other devices will also be wiped)`,
+        clearLocalPrompt: "Clear local list on this device? (Cloud won't be affected)",
+        dedupPrompt: "Keep only 1 unique instance per barcode?",
+        dedupDone: "Deduplicated successfully!",
+        noCodes: "No barcodes yet",
+        noCodesSend: "No barcodes to send.",
+        sending: "Sending to Cloud...",
+        sendSuccess: (n, t) => `Sent ${n} codes to secure channel.`,
+        sendFail: "Send failed, try again.",
+        fetching: "Fetching data from channel...",
+        chanEmpty: "Cloud channel is currently empty.",
+        receivedCodes: (n) => `Received ${n} codes from channel.`,
+        wipedRemote: "Channel was wiped by another device.",
+        clearedCloud: "Cloud data cleared successfully.",
+        clearedLocal: "Local list cleared on this device.",
+        maxLimit: "Max limit of 5000 barcodes reached.",
+        dupFound: (c) => `⚠️ ALREADY EXISTS: [${c}] (Skipped)`,
+        addedCode: (c) => `✅ Added: ${c}`,
+        refocused: "Refocused.",
+        lostNet: "Realtime lost. Click 'Get Codes' to retry."
+      }
+    };
+
+    let currentLang = localStorage.getItem('app_lang') || 'vi';
+    let currentTheme = localStorage.getItem('app_theme') || 'light';
+
+    function applyTheme(theme) {
+      currentTheme = theme;
+      localStorage.setItem('app_theme', theme);
+      if (theme === 'dark') {
+        document.body.classList.add('dark-theme');
+        document.getElementById('themeToggleBtn').textContent = '☀️';
+      } else {
+        document.body.classList.remove('dark-theme');
+        document.getElementById('themeToggleBtn').textContent = '🌙';
+      }
+    }
+
+    function toggleTheme() {
+      applyTheme(currentTheme === 'light' ? 'dark' : 'light');
+    }
+
+    function applyLang(lang) {
+      currentLang = lang;
+      localStorage.setItem('app_lang', lang);
+      const t = I18N[lang];
+
+      document.getElementById('titleText').textContent = t.title;
+      document.getElementById('camLabel').textContent = t.camLabel;
+      document.getElementById('zoomLabel').textContent = t.zoomLabel;
+      document.getElementById('focusBtn').textContent = t.focusBtn;
+      document.getElementById('chanLabel').textContent = t.chanLabel;
+      document.getElementById('copyBtn').textContent = t.copyBtn;
+      document.getElementById('newChanBtn').textContent = t.newChanBtn;
+      document.getElementById('btnSend').textContent = t.btnSend;
+      document.getElementById('btnFetch').textContent = t.btnFetch;
+      document.getElementById('btnExport').textContent = t.btnExport;
+      document.getElementById('btnClearLocal').textContent = t.btnClearLocal;
+      document.getElementById('btnClearCloud').textContent = t.btnClearCloud;
+      document.getElementById('summaryText').textContent = t.summaryText;
+      document.getElementById('btnDedup').textContent = t.btnDedup;
+      document.getElementById('langToggleBtn').textContent = lang === 'vi' ? 'EN' : 'VI';
+
+      renderList();
+    }
+
+    function toggleLang() {
+      applyLang(currentLang === 'vi' ? 'en' : 'vi');
+    }
+
     const MAX_ITEMS = 5000;
     const MAX_CODE_LEN = 256;
     let codes = [];
@@ -197,20 +399,17 @@
     let isStarting = false;
     let currentZoom = 2;
 
-    // Hiển thị trạng thái an toàn tuyệt đối (không inject HTML từ input người dùng)
-    function showStatus(text, color = '#444') {
+    function showStatus(text, color) {
       statusEl.textContent = text;
-      statusEl.style.color = color;
-      statusEl.style.fontWeight = color === '#444' ? 'normal' : 'bold';
+      statusEl.style.color = color || 'var(--text-muted)';
+      statusEl.style.fontWeight = color ? 'bold' : 'normal';
     }
 
-    // Làm sạch chuỗi barcode chống tấn công chèn ký tự điều khiển
     function sanitizeCode(str) {
       if (typeof str !== 'string') return '';
       return str.replace(/[\x00-\x1F\x7F]/g, '').trim().slice(0, MAX_CODE_LEN);
     }
 
-    // Khởi tạo mã kênh ngẫu nhiên bảo mật 16 byte hex (không thể đoán mò)
     function generateSecureChannelName() {
       const randBytes = new Uint8Array(8);
       crypto.getRandomValues(randBytes);
@@ -228,20 +427,22 @@
     }
 
     function generateNewChannel() {
-      if (!confirm('Tạo mã kênh bí mật mới? Bạn sẽ cần nhập mã này sang thiết bị còn lại.')) return;
+      const t = I18N[currentLang];
+      if (!confirm(t.newChanPrompt)) return;
       const newChan = generateSecureChannelName();
       roomInput.value = newChan;
       localStorage.setItem('secure_channel_id', newChan);
       connectSSE();
       fetchFromChannel();
-      showStatus(`Đã đổi sang kênh bảo mật mới.`, '#0969da');
+      showStatus(t.newChanDone, '#0969da');
     }
 
     function copyChannel() {
+      const t = I18N[currentLang];
       navigator.clipboard.writeText(roomInput.value.trim()).then(() => {
-        showStatus('Đã sao chép mã kênh vào bộ nhớ tạm!', '#1a7f37');
+        showStatus(t.copyDone, '#1a7f37');
       }).catch(() => {
-        alert('Mã kênh của bạn: ' + roomInput.value.trim());
+        alert(roomInput.value.trim());
       });
     }
 
@@ -284,18 +485,19 @@
           const target = Math.min(Math.max(val, caps.zoom.min), caps.zoom.max);
           await videoTrack.applyConstraints({ advanced: [{ zoom: target }] });
           if (video) video.style.transform = 'none';
-          showStatus(`Zoom phần cứng: ${target}x`);
+          showStatus(`Zoom: ${target}x`);
           return;
         } catch (_) {}
       }
 
       if (video) {
         video.style.transform = val > 1 ? `scale(${val})` : 'none';
-        showStatus(`Zoom kỹ thuật số: ${val}x`);
+        showStatus(`Zoom: ${val}x`);
       }
     }
 
     async function triggerRefocus(e) {
+      const t = I18N[currentLang];
       if (e && e.clientX) {
         const rect = readerWrapper.getBoundingClientRect();
         focusRing.style.left = `${e.clientX - rect.left}px`;
@@ -314,7 +516,7 @@
           if (caps.focusMode.includes('continuous')) {
             await videoTrack.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
           }
-          showStatus('Đã lấy nét lại.');
+          showStatus(t.refocused);
         } catch (_) {}
       }
     }
@@ -352,19 +554,20 @@
       if (now - lastScanTime < 1200) return;
       lastScanTime = now;
 
+      const t = I18N[currentLang];
       const decodedText = sanitizeCode(rawDecodedText);
       if (!decodedText) return;
 
       if (codes.includes(decodedText)) {
         playWarningBeep();
         if (navigator.vibrate) navigator.vibrate([100, 60, 100]);
-        showStatus(`⚠️ ĐÃ CÓ: [${decodedText}] (Không thêm lại)`, '#cf222e');
+        showStatus(t.dupFound(decodedText), '#cf222e');
         flashExistingItem(decodedText);
         return;
       }
 
       if (codes.length >= MAX_ITEMS) {
-        alert('Đã đạt giới hạn tối đa 5000 mã.');
+        alert(t.maxLimit);
         return;
       }
 
@@ -372,7 +575,7 @@
       renderList();
       playSuccessBeep();
       if (navigator.vibrate) navigator.vibrate(80);
-      showStatus(`✅ Đã thêm: ${decodedText}`, '#1a7f37');
+      showStatus(t.addedCode(decodedText), '#1a7f37');
     }
 
     const formatsToSupport = [
@@ -406,7 +609,8 @@
     async function startScanner(cameraId) {
       if (isStarting) return;
       isStarting = true;
-      showStatus('Đang chuyển đổi camera...');
+      const t = I18N[currentLang];
+      showStatus(t.camSwitching);
 
       await stopActiveStreams();
 
@@ -436,10 +640,10 @@
           () => {}
         );
 
-        showStatus('Camera sẵn sàng.');
+        showStatus(t.camReady);
         hookVideoTrack();
       } catch (err) {
-        showStatus('Lỗi camera: ' + (err.message || err), '#cf222e');
+        showStatus(t.camError + (err.message || err), '#cf222e');
       } finally {
         isStarting = false;
       }
@@ -459,7 +663,7 @@
         const devices = await Html5Qrcode.getCameras();
         cameraSelect.innerHTML = '';
         if (!devices || !devices.length) {
-          cameraSelect.innerHTML = '<option value="">Không tìm thấy camera</option>';
+          cameraSelect.innerHTML = '<option value="">No Camera</option>';
           await startScanner(null);
           return;
         }
@@ -486,13 +690,13 @@
         cameraSelect.value = selectedId;
         await startScanner(selectedId);
       } catch (err) {
-        cameraSelect.innerHTML = '<option value="">Camera mặc định</option>';
+        cameraSelect.innerHTML = '<option value="">Default Camera</option>';
         await startScanner(null);
       }
     }
 
-    // Render danh sách bằng DOM API an toàn 100% (chống XSS)
     function renderList() {
+      const t = I18N[currentLang];
       const freq = {};
       codes.forEach(c => freq[c] = (freq[c] || 0) + 1);
 
@@ -503,7 +707,7 @@
 
       countText.innerHTML = '';
       const totalSpan = document.createElement('span');
-      totalSpan.textContent = `Tổng: ${codes.length}`;
+      totalSpan.textContent = `${t.totalPrefix} ${codes.length}`;
       countText.appendChild(totalSpan);
 
       if (duplicateCount > 0) {
@@ -511,7 +715,7 @@
         dupBadge.style.color = '#d1242f';
         dupBadge.style.fontWeight = 'bold';
         dupBadge.style.marginLeft = '4px';
-        dupBadge.textContent = `(${duplicateCount} trùng)`;
+        dupBadge.textContent = `(${duplicateCount} ${t.dupSuffix})`;
         countText.appendChild(dupBadge);
       }
 
@@ -533,7 +737,7 @@
         indexB.textContent = `#${originalIdx + 1} `;
 
         const codeSpan = document.createElement('span');
-        codeSpan.textContent = code; // Sử dụng textContent chống DOM-XSS
+        codeSpan.textContent = code;
 
         infoDiv.appendChild(indexB);
         infoDiv.appendChild(codeSpan);
@@ -541,13 +745,13 @@
         if (isDup) {
           const dupSpan = document.createElement('span');
           dupSpan.className = 'badge-dup';
-          dupSpan.textContent = `Trùng (${freq[code]}x)`;
+          dupSpan.textContent = `${t.dupBadge} (${freq[code]}x)`;
           infoDiv.appendChild(dupSpan);
         }
 
         const delBtn = document.createElement('button');
         delBtn.className = 'del-btn';
-        delBtn.textContent = 'Xóa';
+        delBtn.textContent = t.delBtn;
         delBtn.onclick = () => removeCode(originalIdx);
 
         li.appendChild(infoDiv);
@@ -562,34 +766,37 @@
     }
 
     function removeDuplicates() {
-      if (!confirm('Lọc trùng: Chỉ giữ 1 bản sao duy nhất cho mỗi mã?')) return;
+      const t = I18N[currentLang];
+      if (!confirm(t.dedupPrompt)) return;
       codes = [...new Set(codes)];
       renderList();
-      showStatus('Đã lọc sạch các mã trùng lặp!', '#1a7f37');
+      showStatus(t.dedupDone, '#1a7f37');
     }
 
     document.getElementById('btnSend').onclick = async () => {
-      if (!codes.length) return alert('Chưa có mã nào để gửi.');
+      const t = I18N[currentLang];
+      if (!codes.length) return alert(t.noCodesSend);
       const topic = getTopic();
-      showStatus('Đang gửi lên Cloud...');
+      showStatus(t.sending);
       try {
         const res = await fetch(`https://ntfy.sh/${topic}`, {
           method: 'POST',
           body: codes.join('\n')
         });
         if (res.ok) {
-          showStatus(`Đã gửi ${codes.length} mã lên kênh an toàn.`, '#1a7f37');
+          showStatus(t.sendSuccess(codes.length, topic), '#1a7f37');
         } else {
-          showStatus('Gửi thất bại, thử lại sau.', '#cf222e');
+          showStatus(t.sendFail, '#cf222e');
         }
       } catch (e) {
-        showStatus(`Lỗi mạng: ${e.message}`, '#cf222e');
+        showStatus(`${I18N[currentLang].camError}${e.message}`, '#cf222e');
       }
     };
 
     async function fetchFromChannel() {
+      const t = I18N[currentLang];
       const topic = getTopic();
-      showStatus('Đang lấy dữ liệu từ kênh...');
+      showStatus(t.fetching);
       try {
         const res = await fetch(`https://ntfy.sh/${topic}/json?poll=1`);
         if (res.ok) {
@@ -609,7 +816,7 @@
           if (latestMsg === '__CLEAR__' || !latestMsg) {
             codes = [];
             renderList();
-            showStatus('Kênh Cloud hiện đang trống.');
+            showStatus(t.chanEmpty);
           } else {
             codes = latestMsg
               .split('\n')
@@ -617,18 +824,19 @@
               .filter(Boolean)
               .slice(0, MAX_ITEMS);
             renderList();
-            showStatus(`Đã nhận ${codes.length} mã từ kênh.`, '#1a7f37');
+            showStatus(t.receivedCodes(codes.length), '#1a7f37');
           }
         }
       } catch (e) {
-        showStatus('Chưa thể lấy dữ liệu từ kênh.', '#cf222e');
+        showStatus('Error fetching channel.', '#cf222e');
       }
     }
 
     document.getElementById('btnClearCloud').onclick = async () => {
+      const t = I18N[currentLang];
       const topic = getTopic();
-      if (!confirm(`Xóa dữ liệu trên Cloud cho kênh này?\n(Các thiết bị khác đang kết nối kênh này cũng sẽ xóa danh sách)`)) return;
-      showStatus('Đang xóa dữ liệu trên Cloud...');
+      if (!confirm(t.clearCloudPrompt(topic))) return;
+      showStatus(t.sending);
       try {
         const res = await fetch(`https://ntfy.sh/${topic}`, {
           method: 'POST',
@@ -637,28 +845,30 @@
         if (res.ok) {
           codes = [];
           renderList();
-          showStatus('Đã xóa sạch dữ liệu trên kênh Cloud.', '#1a7f37');
+          showStatus(t.clearedCloud, '#1a7f37');
         } else {
-          showStatus('Không thể xóa, thử lại sau.', '#cf222e');
+          showStatus('Error clearing Cloud.', '#cf222e');
         }
       } catch (e) {
-        showStatus(`Lỗi mạng: ${e.message}`, '#cf222e');
+        showStatus(`Error: ${e.message}`, '#cf222e');
       }
     };
 
     document.getElementById('btnClearLocal').onclick = () => {
-      if (!confirm('Xóa danh sách trên máy này? (Không ảnh hưởng đến Cloud)')) return;
+      const t = I18N[currentLang];
+      if (!confirm(t.clearLocalPrompt)) return;
       codes = [];
       renderList();
-      showStatus('Đã xóa danh sách trên máy này.');
+      showStatus(t.clearedLocal);
     };
 
     function connectSSE() {
       if (eventSource) eventSource.close();
       const topic = getTopic();
+      const t = I18N[currentLang];
       eventSource = new EventSource(`https://ntfy.sh/${topic}/sse`);
       eventSource.onopen = () => {
-        showStatus(`Đã kết nối kênh bảo mật.`);
+        showStatus(t.connectedSec);
       };
       eventSource.onmessage = (e) => {
         try {
@@ -667,7 +877,7 @@
             if (data.message === '__CLEAR__') {
               codes = [];
               renderList();
-              showStatus('Kênh đã được xóa bởi thiết bị khác.');
+              showStatus(I18N[currentLang].wipedRemote);
               return;
             }
             codes = data.message
@@ -676,12 +886,12 @@
               .filter(Boolean)
               .slice(0, MAX_ITEMS);
             renderList();
-            showStatus(`Nhận dữ liệu mới (${codes.length} mã)`, '#1a7f37');
+            showStatus(I18N[currentLang].receivedCodes(codes.length), '#1a7f37');
           }
         } catch (_) {}
       };
       eventSource.onerror = () => {
-        showStatus('Mất kết nối realtime, bấm "Lấy mã" để tải lại.', '#b54708');
+        showStatus(I18N[currentLang].lostNet, '#b54708');
       };
     }
 
@@ -694,7 +904,8 @@
     document.getElementById('btnFetch').onclick = fetchFromChannel;
 
     document.getElementById('btnExport').onclick = () => {
-      if (!codes.length) return alert('Chưa có mã nào');
+      const t = I18N[currentLang];
+      if (!codes.length) return alert(t.noCodes);
       const blob = new Blob([codes.join('\n')], { type: 'text/plain;charset=utf-8' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
@@ -703,6 +914,8 @@
       URL.revokeObjectURL(a.href);
     };
 
+    applyTheme(currentTheme);
+    applyLang(currentLang);
     initChannel();
     initCameraList();
     fetchFromChannel();
