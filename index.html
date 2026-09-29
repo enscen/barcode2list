@@ -44,13 +44,29 @@
   <ul id="list"></ul>
 
   <script>
-    // ponytail: ntfy.sh public topic. Upgrade path: private WebSocket / Supabase Realtime if end-to-end encryption required.
+    // ponytail: native BarcodeDetector + Full HD constraints. Upgrade path: OpenCV wasm if inverted/damaged codes.
     let codes = [];
     const listEl = document.getElementById('list');
     const countEl = document.getElementById('count');
     const statusEl = document.getElementById('statusText');
     const roomInput = document.getElementById('roomInput');
     let eventSource = null;
+    let audioCtx = null;
+
+    function playBeep() {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.frequency.value = 950;
+        gain.gain.value = 0.15;
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.08);
+      } catch (_) {}
+    }
 
     function getTopic() {
       return (roomInput.value.trim() || 'enscen-barcode').replace(/[^a-zA-Z0-9_-]/g, '');
@@ -76,17 +92,50 @@
       renderList();
     }
 
+    let lastScanTime = 0;
     function onScanSuccess(decodedText) {
-      if (codes[codes.length - 1] === decodedText) return;
+      const now = Date.now();
+      if (codes[codes.length - 1] === decodedText && (now - lastScanTime < 2000)) return;
+      lastScanTime = now;
       codes.push(decodedText);
       renderList();
-      if (navigator.vibrate) navigator.vibrate(100);
+      playBeep();
+      if (navigator.vibrate) navigator.vibrate(80);
     }
 
-    const scanner = new Html5QrcodeScanner('reader', { fps: 10, qrbox: { width: 250, height: 150 } });
+    const formatsToSupport = [
+      Html5QrcodeSupportedFormats.EAN_13,
+      Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.CODE_128,
+      Html5QrcodeSupportedFormats.CODE_39,
+      Html5QrcodeSupportedFormats.UPC_A,
+      Html5QrcodeSupportedFormats.UPC_E,
+      Html5QrcodeSupportedFormats.QR_CODE
+    ];
+
+    const scanner = new Html5QrcodeScanner('reader', {
+      fps: 20,
+      qrbox: (w, h) => ({
+        width: Math.floor(Math.min(w * 0.88, 380)),
+        height: Math.floor(Math.min(h * 0.45, 180))
+      }),
+      aspectRatio: 1.777778,
+      showTorchButtonIfSupported: true,
+      showZoomSliderIfSupported: true,
+      defaultZoomValueIfSupported: 1.3,
+      videoConstraints: {
+        facingMode: { ideal: "environment" },
+        width: { min: 1280, ideal: 1920 },
+        height: { min: 720, ideal: 1080 },
+        focusMode: "continuous"
+      },
+      experimentalFeatures: {
+        useBarCodeDetectorIfSupported: true
+      },
+      formatsToSupport: formatsToSupport
+    });
     scanner.render(onScanSuccess);
 
-    // Gửi danh sách sang thiết bị khác (không cần token, lưu tạm cloud 12h)
     document.getElementById('btnSend').onclick = async () => {
       if (!codes.length) return alert('Chưa có mã nào để gửi.');
       const topic = getTopic();
@@ -106,7 +155,6 @@
       }
     };
 
-    // Nhận dữ liệu gần nhất từ kênh
     async function fetchFromChannel() {
       const topic = getTopic();
       statusEl.textContent = `Đang lấy dữ liệu từ kênh [${topic}]...`;
@@ -127,7 +175,6 @@
       }
     }
 
-    // Tự động đồng bộ thời gian thực (SSE)
     function connectSSE() {
       if (eventSource) eventSource.close();
       const topic = getTopic();
