@@ -26,7 +26,6 @@
     .cam-select-box { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
     .cam-select-box select { flex: 1; padding: 6px 8px; font-size: 13px; border: 1.5px solid #0969da; border-radius: 6px; background: #fff; }
 
-    /* Chiều cao khung camera khóa ở 30% màn hình */
     #reader-wrapper {
       position: relative;
       width: 100%;
@@ -38,11 +37,7 @@
       background: #000;
       flex-shrink: 0;
     }
-    #reader {
-      width: 100% !important;
-      height: 100% !important;
-      border: none !important;
-    }
+    #reader { width: 100% !important; height: 100% !important; border: none !important; }
     #reader video {
       width: 100% !important;
       height: 100% !important;
@@ -53,7 +48,7 @@
     .focus-ring { position: absolute; width: 50px; height: 50px; border: 2px solid #2da44e; border-radius: 6px; pointer-events: none; transform: translate(-50%, -50%) scale(1.4); opacity: 0; transition: transform 0.2s, opacity 0.2s; z-index: 10; }
     .focus-ring.active { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 
-    .camera-tools { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-top: 6px; margin-bottom: 6px; padding: 4px 8px; background: #fff; border: 1px solid #e1e4e8; border-radius: 6px; flex-shrink: 0; }
+    .camera-tools { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin: 6px 0; padding: 4px 8px; background: #fff; border: 1px solid #e1e4e8; border-radius: 6px; flex-shrink: 0; }
     .camera-tools span { font-size: 12px; font-weight: 600; color: #444; }
     .zoom-btns { display: flex; gap: 4px; }
     .zoom-btns button { padding: 4px 8px; font-size: 11px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; }
@@ -70,9 +65,8 @@
     button.del-btn { flex: none; padding: 3px 8px; font-size: 11px; color: #cf222e; border: 1px solid #cf222e; border-radius: 4px; background: #fff; }
 
     .list-header { display: flex; justify-content: space-between; align-items: center; padding: 4px 2px; font-size: 13px; font-weight: 600; color: #333; flex-shrink: 0; }
-    .status { font-size: 11px; color: #666; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; margin-bottom: 4px; }
+    .status { font-size: 12px; min-height: 18px; color: #444; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; margin-bottom: 4px; }
 
-    /* Khu vực danh sách chiếm toàn bộ chiều cao còn lại và cuộn mượt */
     #list-container {
       flex: 1;
       overflow-y: auto;
@@ -84,13 +78,48 @@
       -webkit-overflow-scrolling: touch;
     }
     ul { list-style: none; padding: 0; margin: 0; }
-    li { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee; font-family: monospace; font-size: 13px; }
+    li {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 6px;
+      border-bottom: 1px solid #eee;
+      font-family: monospace;
+      font-size: 13px;
+      transition: background-color 0.3s;
+    }
+    /* Giao diện nổi bật cho barcode trùng lặp */
+    li.duplicate-item {
+      background-color: #fff8e5;
+      border-left: 4px solid #f0883e;
+      border-radius: 4px;
+      margin: 2px 0;
+    }
+    .code-info { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+    .badge-dup {
+      background: #ffebe9;
+      color: #cf222e;
+      border: 1px solid #ff8182;
+      border-radius: 4px;
+      font-size: 10px;
+      padding: 2px 6px;
+      font-weight: bold;
+    }
+    .btn-dedup {
+      font-size: 11px;
+      color: #d1242f;
+      background: transparent;
+      border: 1px solid #d1242f;
+      border-radius: 4px;
+      padding: 2px 6px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
   <div class="header-row">
     <h2>Quét Barcode</h2>
-    <small style="color:#888;">v1.5</small>
+    <small style="color:#888;">v1.6</small>
   </div>
 
   <div class="cam-select-box">
@@ -100,7 +129,6 @@
     </select>
   </div>
 
-  <!-- Khung camera 30vh -->
   <div id="reader-wrapper">
     <div id="reader"></div>
     <div id="focusRing" class="focus-ring"></div>
@@ -130,21 +158,24 @@
   </div>
 
   <div class="list-header">
-    <span>Danh sách đã quét</span>
-    <span>Tổng: <b id="count">0</b> mã</span>
+    <span id="summaryText">Danh sách mã</span>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <span id="countText">Tổng: <b>0</b></span>
+      <button class="btn-dedup" id="btnDedup" style="display:none;" onclick="removeDuplicates()">Lọc trùng</button>
+    </div>
   </div>
   <div class="status" id="statusText">Trạng thái: Đang kết nối...</div>
 
-  <!-- Danh sách barcode chiếm phần lớn màn hình còn lại -->
   <div id="list-container">
     <ul id="list"></ul>
   </div>
 
   <script>
-    // ponytail: 30vh viewport layout with flex list container.
+    // ponytail: in-memory duplicate detection + distinct dual audio feedback.
     let codes = [];
     const listEl = document.getElementById('list');
-    const countEl = document.getElementById('count');
+    const countText = document.getElementById('countText');
+    const btnDedup = document.getElementById('btnDedup');
     const statusEl = document.getElementById('statusText');
     const roomInput = document.getElementById('roomInput');
     const cameraSelect = document.getElementById('cameraSelect');
@@ -157,7 +188,7 @@
     let isStarting = false;
     let currentZoom = 2;
 
-    function playBeep() {
+    function playTone(freq, duration, gainVal) {
       try {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -165,11 +196,22 @@
         const gain = audioCtx.createGain();
         osc.connect(gain);
         gain.connect(audioCtx.destination);
-        osc.frequency.value = 950;
-        gain.gain.value = 0.15;
+        osc.frequency.value = freq;
+        gain.gain.value = gainVal || 0.15;
         osc.start();
-        osc.stop(audioCtx.currentTime + 0.08);
+        osc.stop(audioCtx.currentTime + duration);
       } catch (_) {}
+    }
+
+    // Âm bíp cao khi quét mã mới thành công
+    function playSuccessBeep() {
+      playTone(950, 0.08, 0.15);
+    }
+
+    // Âm bíp trầm 2 nhịp cảnh báo khi quét mã đã có
+    function playWarningBeep() {
+      playTone(320, 0.1, 0.2);
+      setTimeout(() => playTone(260, 0.12, 0.2), 120);
     }
 
     async function setZoom(val, btnEl) {
@@ -236,15 +278,39 @@
       }
     }
 
+    // Nháy sáng item đã tồn tại trong danh sách
+    function flashExistingItem(codeText) {
+      const items = listEl.querySelectorAll('li');
+      items.forEach(li => {
+        if (li.dataset.code === codeText) {
+          li.style.backgroundColor = '#ffdce0';
+          li.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          setTimeout(() => { li.style.backgroundColor = ''; }, 1400);
+        }
+      });
+    }
+
     let lastScanTime = 0;
     function onScanSuccess(decodedText) {
       const now = Date.now();
-      if (codes[codes.length - 1] === decodedText && (now - lastScanTime < 2000)) return;
+      if (now - lastScanTime < 1200) return;
       lastScanTime = now;
+
+      // Kiểm tra trùng lặp trên thiết bị hiện tại
+      if (codes.includes(decodedText)) {
+        playWarningBeep();
+        if (navigator.vibrate) navigator.vibrate([100, 60, 100]);
+        statusEl.innerHTML = `<span style="color:#cf222e;font-weight:bold;">⚠️ ĐÃ CÓ: [${decodedText}] (Không thêm lại)</span>`;
+        flashExistingItem(decodedText);
+        return;
+      }
+
+      // Thêm mã mới hợp lệ
       codes.push(decodedText);
       renderList();
-      playBeep();
+      playSuccessBeep();
       if (navigator.vibrate) navigator.vibrate(80);
+      statusEl.innerHTML = `<span style="color:#1a7f37;font-weight:bold;">✅ Đã thêm: ${decodedText}</span>`;
     }
 
     const formatsToSupport = [
@@ -372,17 +438,33 @@
     }
 
     function renderList() {
-      countEl.textContent = codes.length;
+      // Đếm tần suất các mã để phát hiện trùng lặp từ nguồn đồng bộ
+      const freq = {};
+      codes.forEach(c => freq[c] = (freq[c] || 0) + 1);
+
+      let duplicateCount = 0;
+      Object.values(freq).forEach(count => {
+        if (count > 1) duplicateCount += (count - 1);
+      });
+
+      countText.innerHTML = `Tổng: <b>${codes.length}</b>` + (duplicateCount > 0 ? ` (<span style="color:#d1242f;font-weight:bold;">${duplicateCount} trùng</span>)` : '');
+      btnDedup.style.display = duplicateCount > 0 ? 'inline-block' : 'none';
+
       listEl.innerHTML = '';
       codes.slice().reverse().forEach((code, reversedIdx) => {
         const originalIdx = codes.length - 1 - reversedIdx;
+        const isDup = freq[code] > 1;
         const li = document.createElement('li');
-        li.innerHTML = `<span><b>#${originalIdx + 1}</b> &nbsp; ${code}</span>`;
-        const delBtn = document.createElement('button');
-        delBtn.className = 'del-btn';
-        delBtn.textContent = 'Xóa';
-        delBtn.onclick = () => removeCode(originalIdx);
-        li.appendChild(delBtn);
+        li.dataset.code = code;
+        if (isDup) li.className = 'duplicate-item';
+
+        li.innerHTML = `
+          <div class="code-info">
+            <span><b>#${originalIdx + 1}</b> &nbsp; ${code}</span>
+            ${isDup ? `<span class="badge-dup">Trùng (${freq[code]}x)</span>` : ''}
+          </div>
+          <button class="del-btn" onclick="removeCode(${originalIdx})">Xóa</button>
+        `;
         listEl.appendChild(li);
       });
     }
@@ -390,6 +472,14 @@
     function removeCode(index) {
       codes.splice(index, 1);
       renderList();
+    }
+
+    // Nút lọc mã trùng: chỉ giữ 1 mã duy nhất
+    function removeDuplicates() {
+      if (!confirm('Lọc trùng: Chỉ giữ 1 bản sao duy nhất cho mỗi mã?')) return;
+      codes = [...new Set(codes)];
+      renderList();
+      statusEl.innerHTML = `<span style="color:#1a7f37;font-weight:bold;">Đã lọc sạch các mã trùng lặp!</span>`;
     }
 
     document.getElementById('btnSend').onclick = async () => {
@@ -402,7 +492,7 @@
           body: codes.join('\n')
         });
         if (res.ok) {
-          statusEl.textContent = `Đã gửi thành công lên kênh [${topic}]`;
+          statusEl.textContent = `Đã gửi ${codes.length} mã lên kênh [${topic}]`;
         } else {
           statusEl.textContent = 'Gửi thất bại, thử lại sau.';
         }
