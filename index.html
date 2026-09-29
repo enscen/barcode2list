@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Barcode Scanner</title>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    body { font-family: sans-serif; margin: 16px; }
+    #reader { width: 100%; max-width: 480px; margin: 0 auto; }
+    button { padding: 10px 16px; margin: 4px; font-size: 16px; }
+    ul { list-style: none; padding: 0; }
+    li { padding: 6px 0; border-bottom: 1px solid #ddd; font-family: monospace; }
+  </style>
+</head>
+<body>
+  <h2>Quét Barcode</h2>
+  <div id="reader"></div>
+  <p>Tổng: <b id="count">0</b></p>
+  <button id="btnExport">Tải file TXT</button>
+  <button id="btnClear">Xóa</button>
+  <ul id="list"></ul>
+
+  <script>
+    // ponytail: memory-only list, limit ~5k items. Upgrade path: IndexedDB + CSV parser.
+    const codes = [];
+    const listEl = document.getElementById('list');
+    const countEl = document.getElementById('count');
+
+    function onScanSuccess(decodedText) {
+      if (codes[codes.length - 1] === decodedText) return;
+      codes.push(decodedText);
+      countEl.textContent = codes.length;
+      const li = document.createElement('li');
+      li.textContent = `${codes.length}. ${decodedText}`;
+      listEl.prepend(li);
+      if (navigator.vibrate) navigator.vibrate(100);
+    }
+
+    const scanner = new Html5QrcodeScanner('reader', { fps: 10, qrbox: { width: 250, height: 150 } });
+    scanner.render(onScanSuccess);
+
+    document.getElementById('btnExport').onclick = () => {
+      if (!codes.length) return alert('Chưa có mã nào');
+      const blob = new Blob([codes.join('\n')], { type: 'text/plain;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `barcodes_${Date.now()}.txt`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    };
+
+    document.getElementById('btnClear').onclick = () => {
+      codes.length = 0;
+      countEl.textContent = 0;
+      listEl.innerHTML = '';
+    };
+  </script>
+</body>
+</html>
