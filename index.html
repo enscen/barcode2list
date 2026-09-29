@@ -10,14 +10,14 @@
     body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 500px; margin: 0 auto; padding: 12px; }
     #reader { width: 100%; border-radius: 8px; overflow: hidden; margin-bottom: 12px; }
     .btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
-    button { flex: 1 1 calc(50% - 8px); padding: 10px; font-size: 14px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; }
-    button.primary { background: #2da44e; color: #fff; border-color: #2c974b; font-weight: bold; }
+    button { flex: 1 1 calc(50% - 8px); padding: 11px; font-size: 14px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; font-weight: 500; }
+    button.primary { background: #0969da; color: #fff; border-color: #0969da; font-weight: bold; }
+    button.success { background: #2da44e; color: #fff; border-color: #2c974b; font-weight: bold; }
     button.danger { background: #cf222e; color: #fff; border-color: #a40e26; }
     button.del-btn { flex: none; padding: 4px 8px; font-size: 12px; color: #cf222e; border: 1px solid #cf222e; border-radius: 4px; background: transparent; }
-    details { margin: 10px 0; padding: 8px 12px; border: 1px solid #e1e4e8; border-radius: 6px; }
-    summary { cursor: pointer; font-weight: 600; font-size: 13px; }
-    input[type="password"] { width: 100%; padding: 8px; margin: 6px 0; border: 1px solid #ccc; border-radius: 4px; }
-    .status { font-size: 13px; color: #555; padding: 6px 0; }
+    .room-box { display: flex; align-items: center; gap: 8px; margin: 10px 0; padding: 8px 12px; background: #f6f8fa; border: 1px solid #e1e4e8; border-radius: 6px; }
+    .room-box input { flex: 1; padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; }
+    .status { font-size: 13px; color: #555; padding: 6px 0; min-height: 24px; }
     ul { list-style: none; padding: 0; margin: 0; }
     li { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee; font-family: monospace; font-size: 14px; }
   </style>
@@ -26,46 +26,34 @@
   <h2>Quét Barcode</h2>
   <div id="reader"></div>
 
-  <details id="tokenBox">
-    <summary>Cài đặt GitHub Token (để lưu file)</summary>
-    <p style="font-size:12px;color:#555;margin:6px 0;">
-      Cần token có quyền <b>repo</b>: 
-      <a href="https://github.com/settings/tokens/new?scopes=repo&description=barcode2list" target="_blank">Tạo token tại đây</a>.
-    </p>
-    <input type="password" id="tokenInput" placeholder="Dán token ghp_... vào đây">
-    <button type="button" onclick="saveToken()" style="width:100%">Lưu Token trên máy này</button>
-  </details>
+  <div class="room-box">
+    <label for="roomInput"><b>Mã kênh:</b></label>
+    <input type="text" id="roomInput" value="enscen-barcode">
+  </div>
 
   <p>Tổng: <b id="count">0</b> mã</p>
-  <div class="status" id="statusText">Trạng thái: Sẵn sàng</div>
+  <div class="status" id="statusText">Trạng thái: Đang kết nối kênh...</div>
 
   <div class="btn-row">
-    <button class="primary" id="btnSync">Lưu lên GitHub</button>
-    <button id="btnFetch">Tải từ GitHub</button>
-    <button id="btnExport">Tải file TXT</button>
+    <button class="primary" id="btnSend">Gửi sang thiết bị khác</button>
+    <button id="btnFetch">Nhận mã mới nhất</button>
+    <button class="success" id="btnExport">Tải file TXT</button>
     <button class="danger" id="btnClear">Xóa tất cả</button>
   </div>
 
   <ul id="list"></ul>
 
   <script>
-    // ponytail: client-side GitHub REST API. Upgrade path: GitHub App / Backend OAuth for security.
-    const REPO = 'enscen/barcode2list';
-    const FILE_PATH = 'barcodes.txt';
+    // ponytail: ntfy.sh public topic. Upgrade path: private WebSocket / Supabase Realtime if end-to-end encryption required.
     let codes = [];
-
     const listEl = document.getElementById('list');
     const countEl = document.getElementById('count');
     const statusEl = document.getElementById('statusText');
-    const tokenInput = document.getElementById('tokenInput');
+    const roomInput = document.getElementById('roomInput');
+    let eventSource = null;
 
-    const savedToken = localStorage.getItem('gh_token') || '';
-    if (savedToken) tokenInput.value = savedToken;
-
-    function saveToken() {
-      const val = tokenInput.value.trim();
-      localStorage.setItem('gh_token', val);
-      alert('Đã lưu token');
+    function getTopic() {
+      return (roomInput.value.trim() || 'enscen-barcode').replace(/[^a-zA-Z0-9_-]/g, '');
     }
 
     function renderList() {
@@ -98,6 +86,77 @@
     const scanner = new Html5QrcodeScanner('reader', { fps: 10, qrbox: { width: 250, height: 150 } });
     scanner.render(onScanSuccess);
 
+    // Gửi danh sách sang thiết bị khác (không cần token, lưu tạm cloud 12h)
+    document.getElementById('btnSend').onclick = async () => {
+      if (!codes.length) return alert('Chưa có mã nào để gửi.');
+      const topic = getTopic();
+      statusEl.textContent = 'Đang gửi...';
+      try {
+        const res = await fetch(`https://ntfy.sh/${topic}`, {
+          method: 'POST',
+          body: codes.join('\n')
+        });
+        if (res.ok) {
+          statusEl.textContent = `Đã gửi thành công lên kênh [${topic}]`;
+        } else {
+          statusEl.textContent = 'Gửi thất bại, thử lại sau.';
+        }
+      } catch (e) {
+        statusEl.textContent = `Lỗi mạng: ${e.message}`;
+      }
+    };
+
+    // Nhận dữ liệu gần nhất từ kênh
+    async function fetchFromChannel() {
+      const topic = getTopic();
+      statusEl.textContent = `Đang lấy dữ liệu từ kênh [${topic}]...`;
+      try {
+        const res = await fetch(`https://ntfy.sh/${topic}/raw?poll=1`);
+        if (res.ok) {
+          const text = await res.text();
+          if (text.trim()) {
+            codes = text.split('\n').map(s => s.trim()).filter(Boolean);
+            renderList();
+            statusEl.textContent = `Đã nhận ${codes.length} mã từ kênh [${topic}].`;
+          } else {
+            statusEl.textContent = 'Kênh chưa có mã nào.';
+          }
+        }
+      } catch (e) {
+        statusEl.textContent = 'Chưa thể lấy dữ liệu từ kênh.';
+      }
+    }
+
+    // Tự động đồng bộ thời gian thực (SSE)
+    function connectSSE() {
+      if (eventSource) eventSource.close();
+      const topic = getTopic();
+      eventSource = new EventSource(`https://ntfy.sh/${topic}/sse`);
+      eventSource.onopen = () => {
+        statusEl.textContent = `Đã kết nối kênh [${topic}]. Sẵn sàng đồng bộ.`;
+      };
+      eventSource.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.event === 'message' && data.message) {
+            codes = data.message.split('\n').map(s => s.trim()).filter(Boolean);
+            renderList();
+            statusEl.textContent = `Nhận dữ liệu mới (${codes.length} mã)`;
+          }
+        } catch (_) {}
+      };
+      eventSource.onerror = () => {
+        statusEl.textContent = 'Mất kết nối kênh thời gian thực, bấm "Nhận mã" để tải lại.';
+      };
+    }
+
+    roomInput.onchange = () => {
+      connectSSE();
+      fetchFromChannel();
+    };
+
+    document.getElementById('btnFetch').onclick = fetchFromChannel;
+
     document.getElementById('btnExport').onclick = () => {
       if (!codes.length) return alert('Chưa có mã nào');
       const blob = new Blob([codes.join('\n')], { type: 'text/plain;charset=utf-8' });
@@ -109,74 +168,13 @@
     };
 
     document.getElementById('btnClear').onclick = () => {
-      if (!confirm('Xóa toàn bộ danh sách?')) return;
+      if (!confirm('Xóa toàn bộ danh sách hiện tại?')) return;
       codes = [];
       renderList();
     };
 
-    document.getElementById('btnSync').onclick = async () => {
-      const token = localStorage.getItem('gh_token') || tokenInput.value.trim();
-      if (!token) return alert('Vui lòng nhập GitHub Token trong phần Cài đặt.');
-      statusEl.textContent = 'Đang đẩy lên GitHub...';
-
-      try {
-        const getUrl = `https://api.github.com/repos/${REPO}/contents/${FILE_PATH}`;
-        let sha = null;
-        const checkRes = await fetch(getUrl, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (checkRes.ok) {
-          const fileData = await checkRes.json();
-          sha = fileData.sha;
-        }
-
-        const contentBase64 = btoa(unescape(encodeURIComponent(codes.join('\n'))));
-        const putBody = {
-          message: `update barcodes (${codes.length} items)`,
-          content: contentBase64,
-          branch: 'main'
-        };
-        if (sha) putBody.sha = sha;
-
-        const putRes = await fetch(getUrl, {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(putBody)
-        });
-
-        if (putRes.ok) {
-          statusEl.textContent = 'Đã lưu lên GitHub thành công!';
-        } else {
-          const err = await putRes.json();
-          statusEl.textContent = `Lỗi: ${err.message}`;
-        }
-      } catch (e) {
-        statusEl.textContent = `Lỗi mạng: ${e.message}`;
-      }
-    };
-
-    async function loadFromGitHub() {
-      statusEl.textContent = 'Đang tải danh sách từ GitHub...';
-      try {
-        const res = await fetch(`https://raw.githubusercontent.com/${REPO}/main/${FILE_PATH}?t=${Date.now()}`);
-        if (res.ok) {
-          const text = await res.text();
-          codes = text.split('\n').map(s => s.trim()).filter(Boolean);
-          renderList();
-          statusEl.textContent = `Đã tải ${codes.length} mã từ GitHub.`;
-        } else {
-          statusEl.textContent = 'Chưa có file barcodes.txt trên GitHub.';
-        }
-      } catch (e) {
-        statusEl.textContent = 'Không thể tải từ GitHub.';
-      }
-    }
-
-    document.getElementById('btnFetch').onclick = loadFromGitHub;
-    loadFromGitHub();
+    fetchFromChannel();
+    connectSSE();
   </script>
 </body>
 </html>
