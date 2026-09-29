@@ -57,11 +57,12 @@
     .room-box { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; padding: 4px 8px; background: #fff; border: 1px solid #e1e4e8; border-radius: 6px; font-size: 12px; flex-shrink: 0; }
     .room-box input { flex: 1; padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; font-weight: bold; }
 
-    .btn-row { display: flex; gap: 6px; margin-bottom: 6px; flex-shrink: 0; }
-    button.action-btn { flex: 1; padding: 8px 4px; font-size: 12px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; font-weight: 500; }
+    .btn-row { display: flex; gap: 6px; margin-bottom: 5px; flex-shrink: 0; }
+    button.action-btn { flex: 1; padding: 7px 4px; font-size: 12px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; font-weight: 500; }
     button.primary { background: #0969da; color: #fff; border-color: #0969da; font-weight: bold; }
     button.success { background: #2da44e; color: #fff; border-color: #2c974b; font-weight: bold; }
-    button.danger { background: #cf222e; color: #fff; border-color: #a40e26; }
+    button.danger-outline { color: #cf222e; border-color: #cf222e; }
+    button.danger { background: #cf222e; color: #fff; border-color: #a40e26; font-weight: bold; }
     button.del-btn { flex: none; padding: 3px 8px; font-size: 11px; color: #cf222e; border: 1px solid #cf222e; border-radius: 4px; background: #fff; }
 
     .list-header { display: flex; justify-content: space-between; align-items: center; padding: 4px 2px; font-size: 13px; font-weight: 600; color: #333; flex-shrink: 0; }
@@ -88,7 +89,6 @@
       font-size: 13px;
       transition: background-color 0.3s;
     }
-    /* Giao diện nổi bật cho barcode trùng lặp */
     li.duplicate-item {
       background-color: #fff8e5;
       border-left: 4px solid #f0883e;
@@ -119,7 +119,7 @@
 <body>
   <div class="header-row">
     <h2>Quét Barcode</h2>
-    <small style="color:#888;">v1.6</small>
+    <small style="color:#888;">v1.7</small>
   </div>
 
   <div class="cam-select-box">
@@ -147,14 +147,17 @@
 
   <div class="room-box">
     <label for="roomInput"><b>Kênh:</b></label>
-    <input type="text" id="roomInput" value="enscen-barcode">
+    <input type="text" id="roomInput" value="enscen-barcode" placeholder="Tên kênh...">
   </div>
 
   <div class="btn-row">
-    <button class="action-btn primary" id="btnSend">Gửi lên Cloud</button>
-    <button class="action-btn" id="btnFetch">Lấy mã mới</button>
+    <button class="action-btn primary" id="btnSend">Gửi Cloud</button>
+    <button class="action-btn" id="btnFetch">Lấy mã</button>
     <button class="action-btn success" id="btnExport">Tải TXT</button>
-    <button class="action-btn danger" id="btnClear">Xóa hết</button>
+  </div>
+  <div class="btn-row">
+    <button class="action-btn danger-outline" id="btnClearLocal">Xóa máy này</button>
+    <button class="action-btn danger" id="btnClearCloud">Xóa trên Cloud</button>
   </div>
 
   <div class="list-header">
@@ -171,7 +174,7 @@
   </div>
 
   <script>
-    // ponytail: in-memory duplicate detection + distinct dual audio feedback.
+    // ponytail: ntfy __CLEAR__ signal for remote synchronization wipe.
     let codes = [];
     const listEl = document.getElementById('list');
     const countText = document.getElementById('countText');
@@ -203,12 +206,7 @@
       } catch (_) {}
     }
 
-    // Âm bíp cao khi quét mã mới thành công
-    function playSuccessBeep() {
-      playTone(950, 0.08, 0.15);
-    }
-
-    // Âm bíp trầm 2 nhịp cảnh báo khi quét mã đã có
+    function playSuccessBeep() { playTone(950, 0.08, 0.15); }
     function playWarningBeep() {
       playTone(320, 0.1, 0.2);
       setTimeout(() => playTone(260, 0.12, 0.2), 120);
@@ -278,7 +276,6 @@
       }
     }
 
-    // Nháy sáng item đã tồn tại trong danh sách
     function flashExistingItem(codeText) {
       const items = listEl.querySelectorAll('li');
       items.forEach(li => {
@@ -296,7 +293,6 @@
       if (now - lastScanTime < 1200) return;
       lastScanTime = now;
 
-      // Kiểm tra trùng lặp trên thiết bị hiện tại
       if (codes.includes(decodedText)) {
         playWarningBeep();
         if (navigator.vibrate) navigator.vibrate([100, 60, 100]);
@@ -305,7 +301,6 @@
         return;
       }
 
-      // Thêm mã mới hợp lệ
       codes.push(decodedText);
       renderList();
       playSuccessBeep();
@@ -438,7 +433,6 @@
     }
 
     function renderList() {
-      // Đếm tần suất các mã để phát hiện trùng lặp từ nguồn đồng bộ
       const freq = {};
       codes.forEach(c => freq[c] = (freq[c] || 0) + 1);
 
@@ -474,7 +468,6 @@
       renderList();
     }
 
-    // Nút lọc mã trùng: chỉ giữ 1 mã duy nhất
     function removeDuplicates() {
       if (!confirm('Lọc trùng: Chỉ giữ 1 bản sao duy nhất cho mỗi mã?')) return;
       codes = [...new Set(codes)];
@@ -501,25 +494,70 @@
       }
     };
 
+    // Lấy thông tin mới nhất từ Cloud
     async function fetchFromChannel() {
       const topic = getTopic();
       statusEl.textContent = `Đang lấy dữ liệu từ kênh [${topic}]...`;
       try {
-        const res = await fetch(`https://ntfy.sh/${topic}/raw?poll=1`);
+        const res = await fetch(`https://ntfy.sh/${topic}/json?poll=1`);
         if (res.ok) {
           const text = await res.text();
-          if (text.trim()) {
-            codes = text.split('\n').map(s => s.trim()).filter(Boolean);
+          const lines = text.trim().split('\n').filter(Boolean);
+          let latestMsg = null;
+          for (let i = lines.length - 1; i >= 0; i--) {
+            try {
+              const parsed = JSON.parse(lines[i]);
+              if (parsed.event === 'message' && typeof parsed.message === 'string') {
+                latestMsg = parsed.message;
+                break;
+              }
+            } catch (_) {}
+          }
+
+          if (latestMsg === '__CLEAR__' || !latestMsg) {
+            codes = [];
+            renderList();
+            statusEl.textContent = `Kênh [${topic}] hiện đang trống.`;
+          } else {
+            codes = latestMsg.split('\n').map(s => s.trim()).filter(Boolean);
             renderList();
             statusEl.textContent = `Đã nhận ${codes.length} mã từ kênh [${topic}].`;
-          } else {
-            statusEl.textContent = 'Kênh chưa có mã nào.';
           }
         }
       } catch (e) {
         statusEl.textContent = 'Chưa thể lấy dữ liệu từ kênh.';
       }
     }
+
+    // Xóa nội dung trên Cloud
+    document.getElementById('btnClearCloud').onclick = async () => {
+      const topic = getTopic();
+      if (!confirm(`Xóa toàn bộ dữ liệu trên kênh Cloud [${topic}]?\n(Các thiết bị khác đang kết nối kênh này cũng sẽ xóa danh sách)`)) return;
+      statusEl.textContent = 'Đang xóa dữ liệu trên Cloud...';
+      try {
+        const res = await fetch(`https://ntfy.sh/${topic}`, {
+          method: 'POST',
+          body: '__CLEAR__'
+        });
+        if (res.ok) {
+          codes = [];
+          renderList();
+          statusEl.textContent = `Đã xóa sạch dữ liệu trên kênh Cloud [${topic}].`;
+        } else {
+          statusEl.textContent = 'Không thể xóa, thử lại sau.';
+        }
+      } catch (e) {
+        statusEl.textContent = `Lỗi mạng: ${e.message}`;
+      }
+    };
+
+    // Xóa danh sách chỉ trên máy này
+    document.getElementById('btnClearLocal').onclick = () => {
+      if (!confirm('Xóa danh sách trên máy này? (Không ảnh hưởng đến Cloud)')) return;
+      codes = [];
+      renderList();
+      statusEl.textContent = 'Đã xóa danh sách trên máy này.';
+    };
 
     function connectSSE() {
       if (eventSource) eventSource.close();
@@ -531,7 +569,13 @@
       eventSource.onmessage = (e) => {
         try {
           const data = JSON.parse(e.data);
-          if (data.event === 'message' && data.message) {
+          if (data.event === 'message' && typeof data.message === 'string') {
+            if (data.message === '__CLEAR__') {
+              codes = [];
+              renderList();
+              statusEl.textContent = `Kênh [${topic}] đã được xóa bởi thiết bị khác.`;
+              return;
+            }
             codes = data.message.split('\n').map(s => s.trim()).filter(Boolean);
             renderList();
             statusEl.textContent = `Nhận dữ liệu mới (${codes.length} mã)`;
@@ -539,7 +583,7 @@
         } catch (_) {}
       };
       eventSource.onerror = () => {
-        statusEl.textContent = 'Mất kết nối realtime, bấm "Lấy mã mới" để tải lại.';
+        statusEl.textContent = 'Mất kết nối realtime, bấm "Lấy mã" để tải lại.';
       };
     }
 
@@ -558,12 +602,6 @@
       a.download = `barcodes_${Date.now()}.txt`;
       a.click();
       URL.revokeObjectURL(a.href);
-    };
-
-    document.getElementById('btnClear').onclick = () => {
-      if (!confirm('Xóa toàn bộ danh sách hiện tại?')) return;
-      codes = [];
-      renderList();
     };
 
     initCameraList();
