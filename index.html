@@ -2,15 +2,19 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Barcode Scanner</title>
   <script src="https://unpkg.com/html5-qrcode"></script>
   <style>
     * { box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 500px; margin: 0 auto; padding: 12px; }
-    .cam-select-box { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-    .cam-select-box select { flex: 1; padding: 8px 10px; font-size: 14px; border: 1px solid #ccc; border-radius: 6px; background: #fff; }
-    #reader-wrapper { position: relative; width: 100%; border-radius: 8px; overflow: hidden; margin-bottom: 8px; background: #000; min-height: 220px; }
+    .header-row { display: flex; justify-content: space-between; align-items: baseline; }
+    .cam-select-box { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
+    .cam-select-box select { flex: 1; padding: 9px 10px; font-size: 14px; border: 2px solid #0969da; border-radius: 6px; background: #fff; font-weight: 500; }
+    #reader-wrapper { position: relative; width: 100%; border-radius: 8px; overflow: hidden; margin-bottom: 8px; background: #000; min-height: 200px; }
     #reader { width: 100%; }
     .focus-ring { position: absolute; width: 60px; height: 60px; border: 2px solid #2da44e; border-radius: 8px; pointer-events: none; transform: translate(-50%, -50%) scale(1.4); opacity: 0; transition: transform 0.2s, opacity 0.2s; z-index: 10; }
     .focus-ring.active { opacity: 1; transform: translate(-50%, -50%) scale(1); }
@@ -33,10 +37,13 @@
   </style>
 </head>
 <body>
-  <h2>Quét Barcode</h2>
+  <div class="header-row">
+    <h2 style="margin:8px 0;">Quét Barcode</h2>
+    <small style="color:#888;">v1.3-switch</small>
+  </div>
 
   <div class="cam-select-box">
-    <label for="cameraSelect"><b>📷 Camera:</b></label>
+    <label for="cameraSelect"><b>📷 Đổi Cam:</b></label>
     <select id="cameraSelect" onchange="onCameraChange(this.value)">
       <option value="">Đang tải danh sách camera...</option>
     </select>
@@ -64,7 +71,7 @@
   </div>
 
   <p>Tổng: <b id="count">0</b> mã</p>
-  <div class="status" id="statusText">Trạng thái: Đang khởi tạo...</div>
+  <div class="status" id="statusText">Trạng thái: Đang kết nối...</div>
 
   <div class="btn-row">
     <button class="primary" id="btnSend">Gửi sang thiết bị khác</button>
@@ -76,7 +83,7 @@
   <ul id="list"></ul>
 
   <script>
-    // ponytail: Html5Qrcode multi-camera controller with persistent selection.
+    // ponytail: Html5Qrcode with explicit hardware track release on switch.
     let codes = [];
     const listEl = document.getElementById('list');
     const countEl = document.getElementById('count');
@@ -152,7 +159,7 @@
           setTimeout(() => {
             setZoom(2.0, document.querySelector('.zoom-btns button:nth-child(3)'));
             triggerRefocus();
-          }, 600);
+          }, 500);
         }
       }
     }
@@ -178,14 +185,37 @@
       Html5QrcodeSupportedFormats.QR_CODE
     ];
 
+    async function stopActiveStreams() {
+      if (videoTrack) {
+        try { videoTrack.stop(); } catch (_) {}
+        videoTrack = null;
+      }
+      if (html5QrCode) {
+        try {
+          if (html5QrCode.isScanning) {
+            await html5QrCode.stop();
+          }
+        } catch (_) {}
+      }
+      // Dừng triệt để tất cả MediaStreamTrack của camera trước đó để Windows/Android nhả camera
+      document.querySelectorAll('#reader video').forEach(v => {
+        if (v.srcObject) {
+          try {
+            v.srcObject.getTracks().forEach(t => t.stop());
+          } catch (_) {}
+          v.srcObject = null;
+        }
+      });
+    }
+
     async function startScanner(cameraId) {
       if (isStarting) return;
       isStarting = true;
-      statusEl.textContent = 'Đang chuyển camera...';
+      statusEl.textContent = 'Đang chuyển đổi camera...';
+
+      await stopActiveStreams();
+
       try {
-        if (html5QrCode && html5QrCode.isScanning) {
-          await html5QrCode.stop();
-        }
         if (!html5QrCode) {
           html5QrCode = new Html5Qrcode("reader", {
             experimentalFeatures: { useBarCodeDetectorIfSupported: true },
@@ -193,7 +223,9 @@
           });
         }
 
-        const cameraConfig = cameraId ? { deviceId: { exact: cameraId } } : { facingMode: "environment" };
+        const cameraConfig = cameraId
+          ? { deviceId: { exact: cameraId } }
+          : { facingMode: "environment" };
 
         await html5QrCode.start(
           cameraConfig,
@@ -203,17 +235,13 @@
               width: Math.floor(Math.min(w * 0.88, 380)),
               height: Math.floor(Math.min(h * 0.45, 180))
             }),
-            aspectRatio: 1.777778,
-            videoConstraints: {
-              width: { min: 1280, ideal: 1920 },
-              height: { min: 720, ideal: 1080 }
-            }
+            aspectRatio: 1.777778
           },
           onScanSuccess,
           () => {}
         );
 
-        statusEl.textContent = 'Camera sẵn sàng.';
+        statusEl.textContent = 'Camera đang hoạt động.';
         hookVideoTrack();
       } catch (err) {
         statusEl.textContent = 'Lỗi camera: ' + (err.message || err);
@@ -230,8 +258,7 @@
 
     async function initCameraList() {
       try {
-        // Xin quyền camera trước để lấy tên label chính xác
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         stream.getTracks().forEach(t => t.stop());
 
         const devices = await Html5Qrcode.getCameras();
@@ -252,8 +279,7 @@
           cameraSelect.appendChild(opt);
 
           const lbl = (dev.label || '').toLowerCase();
-          // Ưu tiên camera sau (back/rear/environment)
-          if (lbl.includes('back') || lbl.includes('sau') || lbl.includes('0') || lbl.includes('environment')) {
+          if (lbl.includes('back') || lbl.includes('sau') || lbl.includes('zxhy') || lbl.includes('environment')) {
             selectedId = dev.id;
           }
         });
@@ -265,7 +291,6 @@
         cameraSelect.value = selectedId;
         await startScanner(selectedId);
       } catch (err) {
-        // Nếu không liệt kê được camera, fallback chạy tự động camera sau
         cameraSelect.innerHTML = '<option value="">Camera mặc định</option>';
         await startScanner(null);
       }
