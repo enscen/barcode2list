@@ -54,8 +54,9 @@
     .zoom-btns button { padding: 4px 8px; font-size: 11px; border: 1px solid #ccc; border-radius: 4px; background: #fff; cursor: pointer; }
     .zoom-btns button.active { background: #0969da; color: #fff; border-color: #0969da; font-weight: bold; }
 
-    .room-box { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; padding: 4px 8px; background: #fff; border: 1px solid #e1e4e8; border-radius: 6px; font-size: 12px; flex-shrink: 0; }
-    .room-box input { flex: 1; padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; font-weight: bold; }
+    .room-box { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; padding: 4px 8px; background: #fff; border: 1px solid #e1e4e8; border-radius: 6px; font-size: 12px; flex-shrink: 0; }
+    .room-box input { flex: 1; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 11px; font-family: monospace; font-weight: bold; }
+    .room-btn { padding: 4px 6px; font-size: 11px; border: 1px solid #ccc; border-radius: 4px; background: #f6f8fa; cursor: pointer; }
 
     .btn-row { display: flex; gap: 6px; margin-bottom: 5px; flex-shrink: 0; }
     button.action-btn { flex: 1; padding: 7px 4px; font-size: 12px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; font-weight: 500; }
@@ -95,7 +96,7 @@
       border-radius: 4px;
       margin: 2px 0;
     }
-    .code-info { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+    .code-info { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; word-break: break-all; }
     .badge-dup {
       background: #ffebe9;
       color: #cf222e;
@@ -119,7 +120,7 @@
 <body>
   <div class="header-row">
     <h2>Quét Barcode</h2>
-    <small style="color:#888;">v1.7</small>
+    <small style="color:#888;">v1.8-secure</small>
   </div>
 
   <div class="cam-select-box">
@@ -147,7 +148,9 @@
 
   <div class="room-box">
     <label for="roomInput"><b>Kênh:</b></label>
-    <input type="text" id="roomInput" value="enscen-barcode" placeholder="Tên kênh...">
+    <input type="text" id="roomInput" placeholder="Mã kênh bảo mật...">
+    <button type="button" class="room-btn" onclick="copyChannel()" title="Sao chép tên kênh">Copy</button>
+    <button type="button" class="room-btn" onclick="generateNewChannel()" title="Tạo mã kênh ngẫu nhiên mới">Mới</button>
   </div>
 
   <div class="btn-row">
@@ -174,8 +177,11 @@
   </div>
 
   <script>
-    // ponytail: ntfy __CLEAR__ signal for remote synchronization wipe.
+    // ponytail: Zero innerHTML interpolation on untrusted code input + cryptographically secure room token generation.
+    const MAX_ITEMS = 5000;
+    const MAX_CODE_LEN = 256;
     let codes = [];
+
     const listEl = document.getElementById('list');
     const countText = document.getElementById('countText');
     const btnDedup = document.getElementById('btnDedup');
@@ -190,6 +196,59 @@
     let audioCtx = null;
     let isStarting = false;
     let currentZoom = 2;
+
+    // Hiển thị trạng thái an toàn tuyệt đối (không inject HTML từ input người dùng)
+    function showStatus(text, color = '#444') {
+      statusEl.textContent = text;
+      statusEl.style.color = color;
+      statusEl.style.fontWeight = color === '#444' ? 'normal' : 'bold';
+    }
+
+    // Làm sạch chuỗi barcode chống tấn công chèn ký tự điều khiển
+    function sanitizeCode(str) {
+      if (typeof str !== 'string') return '';
+      return str.replace(/[\x00-\x1F\x7F]/g, '').trim().slice(0, MAX_CODE_LEN);
+    }
+
+    // Khởi tạo mã kênh ngẫu nhiên bảo mật 16 byte hex (không thể đoán mò)
+    function generateSecureChannelName() {
+      const randBytes = new Uint8Array(8);
+      crypto.getRandomValues(randBytes);
+      const hex = Array.from(randBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+      return `enscen-bc-${hex}`;
+    }
+
+    function initChannel() {
+      let saved = localStorage.getItem('secure_channel_id');
+      if (!saved || saved.trim() === 'enscen-barcode') {
+        saved = generateSecureChannelName();
+        localStorage.setItem('secure_channel_id', saved);
+      }
+      roomInput.value = saved;
+    }
+
+    function generateNewChannel() {
+      if (!confirm('Tạo mã kênh bí mật mới? Bạn sẽ cần nhập mã này sang thiết bị còn lại.')) return;
+      const newChan = generateSecureChannelName();
+      roomInput.value = newChan;
+      localStorage.setItem('secure_channel_id', newChan);
+      connectSSE();
+      fetchFromChannel();
+      showStatus(`Đã đổi sang kênh bảo mật mới.`, '#0969da');
+    }
+
+    function copyChannel() {
+      navigator.clipboard.writeText(roomInput.value.trim()).then(() => {
+        showStatus('Đã sao chép mã kênh vào bộ nhớ tạm!', '#1a7f37');
+      }).catch(() => {
+        alert('Mã kênh của bạn: ' + roomInput.value.trim());
+      });
+    }
+
+    function getTopic() {
+      const val = (roomInput.value.trim() || 'enscen-barcode').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
+      return val || 'enscen-barcode';
+    }
 
     function playTone(freq, duration, gainVal) {
       try {
@@ -225,14 +284,14 @@
           const target = Math.min(Math.max(val, caps.zoom.min), caps.zoom.max);
           await videoTrack.applyConstraints({ advanced: [{ zoom: target }] });
           if (video) video.style.transform = 'none';
-          statusEl.textContent = `Zoom phần cứng: ${target}x`;
+          showStatus(`Zoom phần cứng: ${target}x`);
           return;
         } catch (_) {}
       }
 
       if (video) {
         video.style.transform = val > 1 ? `scale(${val})` : 'none';
-        statusEl.textContent = `Zoom kỹ thuật số: ${val}x`;
+        showStatus(`Zoom kỹ thuật số: ${val}x`);
       }
     }
 
@@ -255,7 +314,7 @@
           if (caps.focusMode.includes('continuous')) {
             await videoTrack.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
           }
-          statusEl.textContent = 'Đã lấy nét lại.';
+          showStatus('Đã lấy nét lại.');
         } catch (_) {}
       }
     }
@@ -288,16 +347,24 @@
     }
 
     let lastScanTime = 0;
-    function onScanSuccess(decodedText) {
+    function onScanSuccess(rawDecodedText) {
       const now = Date.now();
       if (now - lastScanTime < 1200) return;
       lastScanTime = now;
 
+      const decodedText = sanitizeCode(rawDecodedText);
+      if (!decodedText) return;
+
       if (codes.includes(decodedText)) {
         playWarningBeep();
         if (navigator.vibrate) navigator.vibrate([100, 60, 100]);
-        statusEl.innerHTML = `<span style="color:#cf222e;font-weight:bold;">⚠️ ĐÃ CÓ: [${decodedText}] (Không thêm lại)</span>`;
+        showStatus(`⚠️ ĐÃ CÓ: [${decodedText}] (Không thêm lại)`, '#cf222e');
         flashExistingItem(decodedText);
+        return;
+      }
+
+      if (codes.length >= MAX_ITEMS) {
+        alert('Đã đạt giới hạn tối đa 5000 mã.');
         return;
       }
 
@@ -305,7 +372,7 @@
       renderList();
       playSuccessBeep();
       if (navigator.vibrate) navigator.vibrate(80);
-      statusEl.innerHTML = `<span style="color:#1a7f37;font-weight:bold;">✅ Đã thêm: ${decodedText}</span>`;
+      showStatus(`✅ Đã thêm: ${decodedText}`, '#1a7f37');
     }
 
     const formatsToSupport = [
@@ -325,16 +392,12 @@
       }
       if (html5QrCode) {
         try {
-          if (html5QrCode.isScanning) {
-            await html5QrCode.stop();
-          }
+          if (html5QrCode.isScanning) await html5QrCode.stop();
         } catch (_) {}
       }
       document.querySelectorAll('#reader video').forEach(v => {
         if (v.srcObject) {
-          try {
-            v.srcObject.getTracks().forEach(t => t.stop());
-          } catch (_) {}
+          try { v.srcObject.getTracks().forEach(t => t.stop()); } catch (_) {}
           v.srcObject = null;
         }
       });
@@ -343,7 +406,7 @@
     async function startScanner(cameraId) {
       if (isStarting) return;
       isStarting = true;
-      statusEl.textContent = 'Đang chuyển đổi camera...';
+      showStatus('Đang chuyển đổi camera...');
 
       await stopActiveStreams();
 
@@ -373,10 +436,10 @@
           () => {}
         );
 
-        statusEl.textContent = 'Camera sẵn sàng.';
+        showStatus('Camera sẵn sàng.');
         hookVideoTrack();
       } catch (err) {
-        statusEl.textContent = 'Lỗi camera: ' + (err.message || err);
+        showStatus('Lỗi camera: ' + (err.message || err), '#cf222e');
       } finally {
         isStarting = false;
       }
@@ -428,10 +491,7 @@
       }
     }
 
-    function getTopic() {
-      return (roomInput.value.trim() || 'enscen-barcode').replace(/[^a-zA-Z0-9_-]/g, '');
-    }
-
+    // Render danh sách bằng DOM API an toàn 100% (chống XSS)
     function renderList() {
       const freq = {};
       codes.forEach(c => freq[c] = (freq[c] || 0) + 1);
@@ -441,24 +501,57 @@
         if (count > 1) duplicateCount += (count - 1);
       });
 
-      countText.innerHTML = `Tổng: <b>${codes.length}</b>` + (duplicateCount > 0 ? ` (<span style="color:#d1242f;font-weight:bold;">${duplicateCount} trùng</span>)` : '');
-      btnDedup.style.display = duplicateCount > 0 ? 'inline-block' : 'none';
+      countText.innerHTML = '';
+      const totalSpan = document.createElement('span');
+      totalSpan.textContent = `Tổng: ${codes.length}`;
+      countText.appendChild(totalSpan);
 
+      if (duplicateCount > 0) {
+        const dupBadge = document.createElement('span');
+        dupBadge.style.color = '#d1242f';
+        dupBadge.style.fontWeight = 'bold';
+        dupBadge.style.marginLeft = '4px';
+        dupBadge.textContent = `(${duplicateCount} trùng)`;
+        countText.appendChild(dupBadge);
+      }
+
+      btnDedup.style.display = duplicateCount > 0 ? 'inline-block' : 'none';
       listEl.innerHTML = '';
+
       codes.slice().reverse().forEach((code, reversedIdx) => {
         const originalIdx = codes.length - 1 - reversedIdx;
         const isDup = freq[code] > 1;
+
         const li = document.createElement('li');
         li.dataset.code = code;
         if (isDup) li.className = 'duplicate-item';
 
-        li.innerHTML = `
-          <div class="code-info">
-            <span><b>#${originalIdx + 1}</b> &nbsp; ${code}</span>
-            ${isDup ? `<span class="badge-dup">Trùng (${freq[code]}x)</span>` : ''}
-          </div>
-          <button class="del-btn" onclick="removeCode(${originalIdx})">Xóa</button>
-        `;
+        const infoDiv = document.createElement('div');
+        infoDiv.className = 'code-info';
+
+        const indexB = document.createElement('b');
+        indexB.textContent = `#${originalIdx + 1} `;
+
+        const codeSpan = document.createElement('span');
+        codeSpan.textContent = code; // Sử dụng textContent chống DOM-XSS
+
+        infoDiv.appendChild(indexB);
+        infoDiv.appendChild(codeSpan);
+
+        if (isDup) {
+          const dupSpan = document.createElement('span');
+          dupSpan.className = 'badge-dup';
+          dupSpan.textContent = `Trùng (${freq[code]}x)`;
+          infoDiv.appendChild(dupSpan);
+        }
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'del-btn';
+        delBtn.textContent = 'Xóa';
+        delBtn.onclick = () => removeCode(originalIdx);
+
+        li.appendChild(infoDiv);
+        li.appendChild(delBtn);
         listEl.appendChild(li);
       });
     }
@@ -472,32 +565,31 @@
       if (!confirm('Lọc trùng: Chỉ giữ 1 bản sao duy nhất cho mỗi mã?')) return;
       codes = [...new Set(codes)];
       renderList();
-      statusEl.innerHTML = `<span style="color:#1a7f37;font-weight:bold;">Đã lọc sạch các mã trùng lặp!</span>`;
+      showStatus('Đã lọc sạch các mã trùng lặp!', '#1a7f37');
     }
 
     document.getElementById('btnSend').onclick = async () => {
       if (!codes.length) return alert('Chưa có mã nào để gửi.');
       const topic = getTopic();
-      statusEl.textContent = 'Đang gửi...';
+      showStatus('Đang gửi lên Cloud...');
       try {
         const res = await fetch(`https://ntfy.sh/${topic}`, {
           method: 'POST',
           body: codes.join('\n')
         });
         if (res.ok) {
-          statusEl.textContent = `Đã gửi ${codes.length} mã lên kênh [${topic}]`;
+          showStatus(`Đã gửi ${codes.length} mã lên kênh an toàn.`, '#1a7f37');
         } else {
-          statusEl.textContent = 'Gửi thất bại, thử lại sau.';
+          showStatus('Gửi thất bại, thử lại sau.', '#cf222e');
         }
       } catch (e) {
-        statusEl.textContent = `Lỗi mạng: ${e.message}`;
+        showStatus(`Lỗi mạng: ${e.message}`, '#cf222e');
       }
     };
 
-    // Lấy thông tin mới nhất từ Cloud
     async function fetchFromChannel() {
       const topic = getTopic();
-      statusEl.textContent = `Đang lấy dữ liệu từ kênh [${topic}]...`;
+      showStatus('Đang lấy dữ liệu từ kênh...');
       try {
         const res = await fetch(`https://ntfy.sh/${topic}/json?poll=1`);
         if (res.ok) {
@@ -517,23 +609,26 @@
           if (latestMsg === '__CLEAR__' || !latestMsg) {
             codes = [];
             renderList();
-            statusEl.textContent = `Kênh [${topic}] hiện đang trống.`;
+            showStatus('Kênh Cloud hiện đang trống.');
           } else {
-            codes = latestMsg.split('\n').map(s => s.trim()).filter(Boolean);
+            codes = latestMsg
+              .split('\n')
+              .map(s => sanitizeCode(s))
+              .filter(Boolean)
+              .slice(0, MAX_ITEMS);
             renderList();
-            statusEl.textContent = `Đã nhận ${codes.length} mã từ kênh [${topic}].`;
+            showStatus(`Đã nhận ${codes.length} mã từ kênh.`, '#1a7f37');
           }
         }
       } catch (e) {
-        statusEl.textContent = 'Chưa thể lấy dữ liệu từ kênh.';
+        showStatus('Chưa thể lấy dữ liệu từ kênh.', '#cf222e');
       }
     }
 
-    // Xóa nội dung trên Cloud
     document.getElementById('btnClearCloud').onclick = async () => {
       const topic = getTopic();
-      if (!confirm(`Xóa toàn bộ dữ liệu trên kênh Cloud [${topic}]?\n(Các thiết bị khác đang kết nối kênh này cũng sẽ xóa danh sách)`)) return;
-      statusEl.textContent = 'Đang xóa dữ liệu trên Cloud...';
+      if (!confirm(`Xóa dữ liệu trên Cloud cho kênh này?\n(Các thiết bị khác đang kết nối kênh này cũng sẽ xóa danh sách)`)) return;
+      showStatus('Đang xóa dữ liệu trên Cloud...');
       try {
         const res = await fetch(`https://ntfy.sh/${topic}`, {
           method: 'POST',
@@ -542,21 +637,20 @@
         if (res.ok) {
           codes = [];
           renderList();
-          statusEl.textContent = `Đã xóa sạch dữ liệu trên kênh Cloud [${topic}].`;
+          showStatus('Đã xóa sạch dữ liệu trên kênh Cloud.', '#1a7f37');
         } else {
-          statusEl.textContent = 'Không thể xóa, thử lại sau.';
+          showStatus('Không thể xóa, thử lại sau.', '#cf222e');
         }
       } catch (e) {
-        statusEl.textContent = `Lỗi mạng: ${e.message}`;
+        showStatus(`Lỗi mạng: ${e.message}`, '#cf222e');
       }
     };
 
-    // Xóa danh sách chỉ trên máy này
     document.getElementById('btnClearLocal').onclick = () => {
       if (!confirm('Xóa danh sách trên máy này? (Không ảnh hưởng đến Cloud)')) return;
       codes = [];
       renderList();
-      statusEl.textContent = 'Đã xóa danh sách trên máy này.';
+      showStatus('Đã xóa danh sách trên máy này.');
     };
 
     function connectSSE() {
@@ -564,7 +658,7 @@
       const topic = getTopic();
       eventSource = new EventSource(`https://ntfy.sh/${topic}/sse`);
       eventSource.onopen = () => {
-        statusEl.textContent = `Đã kết nối [${topic}]. Sẵn sàng đồng bộ.`;
+        showStatus(`Đã kết nối kênh bảo mật.`);
       };
       eventSource.onmessage = (e) => {
         try {
@@ -573,21 +667,26 @@
             if (data.message === '__CLEAR__') {
               codes = [];
               renderList();
-              statusEl.textContent = `Kênh [${topic}] đã được xóa bởi thiết bị khác.`;
+              showStatus('Kênh đã được xóa bởi thiết bị khác.');
               return;
             }
-            codes = data.message.split('\n').map(s => s.trim()).filter(Boolean);
+            codes = data.message
+              .split('\n')
+              .map(s => sanitizeCode(s))
+              .filter(Boolean)
+              .slice(0, MAX_ITEMS);
             renderList();
-            statusEl.textContent = `Nhận dữ liệu mới (${codes.length} mã)`;
+            showStatus(`Nhận dữ liệu mới (${codes.length} mã)`, '#1a7f37');
           }
         } catch (_) {}
       };
       eventSource.onerror = () => {
-        statusEl.textContent = 'Mất kết nối realtime, bấm "Lấy mã" để tải lại.';
+        showStatus('Mất kết nối realtime, bấm "Lấy mã" để tải lại.', '#b54708');
       };
     }
 
     roomInput.onchange = () => {
+      localStorage.setItem('secure_channel_id', roomInput.value.trim());
       connectSSE();
       fetchFromChannel();
     };
@@ -604,6 +703,7 @@
       URL.revokeObjectURL(a.href);
     };
 
+    initChannel();
     initCameraList();
     fetchFromChannel();
     connectSSE();
