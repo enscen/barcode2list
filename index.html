@@ -106,8 +106,8 @@
     .zoom-btns button.active { background: #0969da; color: #fff; border-color: #0969da; font-weight: bold; }
 
     .room-box { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; padding: 4px 8px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; font-size: 12px; flex-shrink: 0; }
-    .room-box input { flex: 1; padding: 4px 6px; border: 1px solid var(--input-border); border-radius: 4px; font-size: 11px; font-family: monospace; font-weight: bold; background: var(--input-bg); color: var(--text-main); }
-    .room-btn { padding: 4px 6px; font-size: 11px; border: 1px solid var(--input-border); border-radius: 4px; background: var(--bg-card-sub); color: var(--text-main); cursor: pointer; }
+    .room-box input { flex: 1; min-width: 0; padding: 4px 6px; border: 1px solid var(--input-border); border-radius: 4px; font-size: 11px; font-family: monospace; font-weight: bold; background: var(--input-bg); color: var(--text-main); }
+    .room-btn { flex: none; white-space: nowrap; padding: 4px 6px; font-size: 11px; border: 1px solid var(--input-border); border-radius: 4px; background: var(--bg-card-sub); color: var(--text-main); cursor: pointer; }
 
     .btn-row { display: flex; gap: 6px; margin-bottom: 5px; flex-shrink: 0; }
     button.action-btn { flex: 1; padding: 7px 4px; font-size: 12px; border: 1px solid var(--input-border); border-radius: 6px; background: var(--btn-bg); color: var(--btn-text); cursor: pointer; font-weight: 500; }
@@ -205,7 +205,7 @@
   <div class="room-box">
     <label for="roomInput"><b id="chanLabel">Kênh:</b></label>
     <input type="text" id="roomInput" placeholder="...">
-    <button type="button" class="room-btn" id="copyBtn" onclick="copyChannel()">Copy</button>
+    <button type="button" class="room-btn" id="copyBtn" onclick="copyChannel()">Sao chép</button>
     <button type="button" class="room-btn" id="newChanBtn" onclick="generateNewChannel()">Mới</button>
   </div>
 
@@ -241,7 +241,7 @@
         zoomLabel: "Zoom:",
         focusBtn: "Lấy nét",
         chanLabel: "Kênh:",
-        copyBtn: "Copy",
+        copyBtn: "Sao chép",
         newChanBtn: "Mới",
         btnSend: "Gửi Cloud",
         btnFetch: "Lấy mã",
