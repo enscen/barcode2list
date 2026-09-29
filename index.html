@@ -6,34 +6,92 @@
   <title>Barcode Scanner</title>
   <script src="https://unpkg.com/html5-qrcode"></script>
   <style>
-    body { font-family: sans-serif; margin: 16px; }
-    #reader { width: 100%; max-width: 480px; margin: 0 auto; }
-    button { padding: 10px 16px; margin: 4px; font-size: 16px; }
-    ul { list-style: none; padding: 0; }
-    li { padding: 6px 0; border-bottom: 1px solid #ddd; font-family: monospace; }
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 500px; margin: 0 auto; padding: 12px; }
+    #reader { width: 100%; border-radius: 8px; overflow: hidden; margin-bottom: 12px; }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+    button { flex: 1 1 calc(50% - 8px); padding: 10px; font-size: 14px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; }
+    button.primary { background: #2da44e; color: #fff; border-color: #2c974b; font-weight: bold; }
+    button.danger { background: #cf222e; color: #fff; border-color: #a40e26; }
+    button.del-btn { flex: none; padding: 4px 8px; font-size: 12px; color: #cf222e; border: 1px solid #cf222e; border-radius: 4px; background: transparent; }
+    details { margin: 10px 0; padding: 8px 12px; border: 1px solid #e1e4e8; border-radius: 6px; }
+    summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+    input[type="password"] { width: 100%; padding: 8px; margin: 6px 0; border: 1px solid #ccc; border-radius: 4px; }
+    .status { font-size: 13px; color: #555; padding: 6px 0; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee; font-family: monospace; font-size: 14px; }
   </style>
 </head>
 <body>
   <h2>Quét Barcode</h2>
   <div id="reader"></div>
-  <p>Tổng: <b id="count">0</b></p>
-  <button id="btnExport">Tải file TXT</button>
-  <button id="btnClear">Xóa</button>
+
+  <details id="tokenBox">
+    <summary>Cài đặt GitHub Token (để lưu file)</summary>
+    <p style="font-size:12px;color:#555;margin:6px 0;">
+      Cần token có quyền <b>repo</b>: 
+      <a href="https://github.com/settings/tokens/new?scopes=repo&description=barcode2list" target="_blank">Tạo token tại đây</a>.
+    </p>
+    <input type="password" id="tokenInput" placeholder="Dán token ghp_... vào đây">
+    <button type="button" onclick="saveToken()" style="width:100%">Lưu Token trên máy này</button>
+  </details>
+
+  <p>Tổng: <b id="count">0</b> mã</p>
+  <div class="status" id="statusText">Trạng thái: Sẵn sàng</div>
+
+  <div class="btn-row">
+    <button class="primary" id="btnSync">Lưu lên GitHub</button>
+    <button id="btnFetch">Tải từ GitHub</button>
+    <button id="btnExport">Tải file TXT</button>
+    <button class="danger" id="btnClear">Xóa tất cả</button>
+  </div>
+
   <ul id="list"></ul>
 
   <script>
-    // ponytail: memory-only list, limit ~5k items. Upgrade path: IndexedDB + CSV parser.
-    const codes = [];
+    // ponytail: client-side GitHub REST API. Upgrade path: GitHub App / Backend OAuth for security.
+    const REPO = 'enscen/barcode2list';
+    const FILE_PATH = 'barcodes.txt';
+    let codes = [];
+
     const listEl = document.getElementById('list');
     const countEl = document.getElementById('count');
+    const statusEl = document.getElementById('statusText');
+    const tokenInput = document.getElementById('tokenInput');
+
+    const savedToken = localStorage.getItem('gh_token') || '';
+    if (savedToken) tokenInput.value = savedToken;
+
+    function saveToken() {
+      const val = tokenInput.value.trim();
+      localStorage.setItem('gh_token', val);
+      alert('Đã lưu token');
+    }
+
+    function renderList() {
+      countEl.textContent = codes.length;
+      listEl.innerHTML = '';
+      codes.forEach((code, idx) => {
+        const li = document.createElement('li');
+        li.innerHTML = `<span>${idx + 1}. ${code}</span>`;
+        const delBtn = document.createElement('button');
+        delBtn.className = 'del-btn';
+        delBtn.textContent = 'Xóa';
+        delBtn.onclick = () => removeCode(idx);
+        li.appendChild(delBtn);
+        listEl.appendChild(li);
+      });
+    }
+
+    function removeCode(index) {
+      codes.splice(index, 1);
+      renderList();
+    }
 
     function onScanSuccess(decodedText) {
       if (codes[codes.length - 1] === decodedText) return;
       codes.push(decodedText);
-      countEl.textContent = codes.length;
-      const li = document.createElement('li');
-      li.textContent = `${codes.length}. ${decodedText}`;
-      listEl.prepend(li);
+      renderList();
       if (navigator.vibrate) navigator.vibrate(100);
     }
 
@@ -51,10 +109,74 @@
     };
 
     document.getElementById('btnClear').onclick = () => {
-      codes.length = 0;
-      countEl.textContent = 0;
-      listEl.innerHTML = '';
+      if (!confirm('Xóa toàn bộ danh sách?')) return;
+      codes = [];
+      renderList();
     };
+
+    document.getElementById('btnSync').onclick = async () => {
+      const token = localStorage.getItem('gh_token') || tokenInput.value.trim();
+      if (!token) return alert('Vui lòng nhập GitHub Token trong phần Cài đặt.');
+      statusEl.textContent = 'Đang đẩy lên GitHub...';
+
+      try {
+        const getUrl = `https://api.github.com/repos/${REPO}/contents/${FILE_PATH}`;
+        let sha = null;
+        const checkRes = await fetch(getUrl, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (checkRes.ok) {
+          const fileData = await checkRes.json();
+          sha = fileData.sha;
+        }
+
+        const contentBase64 = btoa(unescape(encodeURIComponent(codes.join('\n'))));
+        const putBody = {
+          message: `update barcodes (${codes.length} items)`,
+          content: contentBase64,
+          branch: 'main'
+        };
+        if (sha) putBody.sha = sha;
+
+        const putRes = await fetch(getUrl, {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(putBody)
+        });
+
+        if (putRes.ok) {
+          statusEl.textContent = 'Đã lưu lên GitHub thành công!';
+        } else {
+          const err = await putRes.json();
+          statusEl.textContent = `Lỗi: ${err.message}`;
+        }
+      } catch (e) {
+        statusEl.textContent = `Lỗi mạng: ${e.message}`;
+      }
+    };
+
+    async function loadFromGitHub() {
+      statusEl.textContent = 'Đang tải danh sách từ GitHub...';
+      try {
+        const res = await fetch(`https://raw.githubusercontent.com/${REPO}/main/${FILE_PATH}?t=${Date.now()}`);
+        if (res.ok) {
+          const text = await res.text();
+          codes = text.split('\n').map(s => s.trim()).filter(Boolean);
+          renderList();
+          statusEl.textContent = `Đã tải ${codes.length} mã từ GitHub.`;
+        } else {
+          statusEl.textContent = 'Chưa có file barcodes.txt trên GitHub.';
+        }
+      } catch (e) {
+        statusEl.textContent = 'Không thể tải từ GitHub.';
+      }
+    }
+
+    document.getElementById('btnFetch').onclick = loadFromGitHub;
+    loadFromGitHub();
   </script>
 </body>
 </html>
