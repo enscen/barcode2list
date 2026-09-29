@@ -192,7 +192,7 @@
   </div>
 
   <div class="camera-tools">
-    <span id="zoomLabel">Zoom:</span>
+    <span id="zoomLabel">Thu phóng:</span>
     <div class="zoom-btns" id="zoomButtons">
       <button type="button" onclick="setZoom(1, this)">1x</button>
       <button type="button" onclick="setZoom(1.5, this)">1.5x</button>
@@ -238,7 +238,7 @@
       vi: {
         title: "Quét Barcode",
         camLabel: "📷 Cam:",
-        zoomLabel: "Zoom:",
+        zoomLabel: "Thu phóng:",
         focusBtn: "Lấy nét",
         chanLabel: "Kênh:",
         copyBtn: "Sao chép",
@@ -485,14 +485,14 @@
           const target = Math.min(Math.max(val, caps.zoom.min), caps.zoom.max);
           await videoTrack.applyConstraints({ advanced: [{ zoom: target }] });
           if (video) video.style.transform = 'none';
-          showStatus(`Zoom: ${target}x`);
+          showStatus(`${I18N[currentLang].zoomLabel} ${target}x`);
           return;
         } catch (_) {}
       }
 
       if (video) {
         video.style.transform = val > 1 ? `scale(${val})` : 'none';
-        showStatus(`Zoom: ${val}x`);
+        showStatus(`${I18N[currentLang].zoomLabel} ${val}x`);
       }
     }
 
